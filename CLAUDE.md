@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Suno prompt generator: artist/song/topic/lyrics/YouTube Music link → style prompt, stem prompts, section structure, lyrics.
-React 19 + Vite 7, plain JavaScript (no TypeScript, no test suite). Gemini REST API + MusicAtlas MCP. Deployed to GitHub Pages.
+React 19 + Vite 7, plain JavaScript (no TypeScript, no test suite). Gemini REST API + MusicAtlas MCP. Deployed to GitHub Pages at https://gp-songtools.github.io/suno-style-creator/ (repo `gp-songtools/suno-style-creator`; moved from `pcarenza`).
 
 ## Commands (run from repo root; keep output quiet)
 - Install: `npm ci --silent --no-audit --no-fund`
@@ -47,7 +47,7 @@ vite.config.js        → react() + tailwindcss(); base '/suno-style-creator/' (
 - Gemini REST: `v1beta`, key in the `?key=` query param (not a header). Model is discovered via ListModels; never hardcode a model id (gemini-2.5-flash was shut down 2026-10-16).
 - Errors: throw `GeminiError(msg, {retryable, busy, status, cancelled, partial})`. `busy` (503/429/timeout) → retry once, then next model from `fallbackModels`; never retry once text has streamed. Idle timeout 120 s between chunks.
 - MusicAtlas: call tools ONE AT A TIME (parallel calls return 500 "non-JSON response"); retry once on 5xx/timeout. Browser can't reach it directly (no CORS) → default URL is the proxy.
-- Proxy: origin allowlist in worker.js (`pcarenza.github.io`, localhost:5173/4173); `UPSTREAM` env var overrides the target.
+- Proxy: origin allowlist in worker.js (`gp-songtools.github.io`, old `pcarenza.github.io`, localhost:5173/4173); `UPSTREAM` env var overrides the target.
 - localStorage keys: `gemini.model`, `mcp.enabled`, `mcp.url`. Always wrap access in try/catch (readPref/writePref helpers). A saved `DIRECT_MUSICATLAS_URL` is migrated to the proxy on load.
 - Styling: Tailwind utility classes inline in JSX, dark slate palette, lucide-react icons. No CSS modules.
 - Naming: camelCase JS modules in `src/`, PascalCase only for components. Constants UPPER_SNAKE.
@@ -57,7 +57,7 @@ vite.config.js        → react() + tailwindcss(); base '/suno-style-creator/' (
 ## Git & PR workflow
 - Never push to `main` or `gh-pages` directly; `main` deploys automatically on merge.
 - One branch per change from latest `origin/main`; names use dashes (`style-prompt-1000`). A branch named `feature` exists, so `feature/...` names are rejected.
-- Open PRs with REST: `gh api repos/pcarenza/suno-style-creator/pulls -f title=... -f head=<branch> -f base=main -F body=@file` (`gh pr create` uses GraphQL, which is blocked in cloud sessions).
+- Open PRs with REST: `gh api repos/gp-songtools/suno-style-creator/pulls -f title=... -f head=<branch> -f base=main -F body=@file` (`gh pr create` uses GraphQL, which is blocked in cloud sessions).
 - Don't merge PRs yourself; the owner merges. Check merge state via `gh api .../pulls/<n> --jq .merged`.
 - Clone is shallow: before pushing a new branch run `git fetch origin main`.
 - If a PR was already merged, start follow-up work on a fresh branch from `origin/main`; never add commits to a merged branch.
