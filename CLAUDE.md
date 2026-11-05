@@ -48,11 +48,11 @@ vite.config.js        → react() + tailwindcss(); base '/suno-style-creator/' (
 - Errors: throw `GeminiError(msg, {retryable, busy, status, cancelled, partial})`. `busy` (503/429/timeout) → retry once, then next model from `fallbackModels`; never retry once text has streamed. Idle timeout 120 s between chunks.
 - MusicAtlas: call tools ONE AT A TIME (parallel calls return 500 "non-JSON response"); retry once on 5xx/timeout. Browser can't reach it directly (no CORS) → default URL is the proxy.
 - Proxy: origin allowlist in worker.js (`gp-songtools.github.io`, old `pcarenza.github.io`, localhost:5173/4173); `UPSTREAM` env var overrides the target.
-- localStorage keys: `gemini.model`, `mcp.enabled`, `mcp.url`. Always wrap access in try/catch (readPref/writePref helpers). A saved `DIRECT_MUSICATLAS_URL` is migrated to the proxy on load.
+- localStorage keys: `gemini.model`, `gemini.rememberKey`, `gemini.key` (only while rememberKey is on; removed when it's off), `mcp.enabled`, `mcp.url`. Always wrap access in try/catch (readPref/writePref helpers). A saved `DIRECT_MUSICATLAS_URL` is migrated to the proxy on load.
 - Styling: Tailwind utility classes inline in JSX, dark slate palette, lucide-react icons. No CSS modules.
 - Naming: camelCase JS modules in `src/`, PascalCase only for components. Constants UPPER_SNAKE.
 - UI copy: plain, specific, user-facing ("Gemini is overloaded (HTTP 503)..."); no internal jargon.
-- Never commit API keys; the user pastes their Gemini key at runtime and it is never stored.
+- Never commit API keys; the user pastes their Gemini key at runtime. It is stored only if they opt in with "Remember key on this device" (off by default; plain localStorage, shared with every page on gp-songtools.github.io).
 
 ## Git & PR workflow
 - Never push to `main` or `gh-pages` directly; `main` deploys automatically on merge.
