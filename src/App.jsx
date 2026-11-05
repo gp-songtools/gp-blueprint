@@ -63,7 +63,14 @@ export default function App() {
   const [song, setSong] = useState('');
   const [topic, setTopic] = useState('');
   const [lyrics, setLyrics] = useState('');
-  const [customKey, setCustomKey] = useState('');
+  // Opt-in: the key is saved in this browser's localStorage only while "Remember key" is checked.
+  const [rememberKey, setRememberKey] = useState(() => readPref('gemini.rememberKey', false));
+  const [customKey, setCustomKey] = useState(() => (rememberKey ? readPref('gemini.key', '') : ''));
+  useEffect(() => {
+    writePref('gemini.rememberKey', rememberKey);
+    if (rememberKey) writePref('gemini.key', customKey);
+    else try { localStorage.removeItem('gemini.key'); } catch { /* storage unavailable */ }
+  }, [rememberKey, customKey]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -489,6 +496,20 @@ export default function App() {
                   autoComplete="off"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
                 />
+                <div className="flex items-center justify-between gap-2">
+                  <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                    <input type="checkbox" checked={rememberKey} onChange={(e) => setRememberKey(e.target.checked)} className="accent-yellow-500" />
+                    Remember key on this device
+                  </label>
+                  {rememberKey && customKey && (
+                    <button type="button" onClick={() => setCustomKey('')} className="text-xs text-slate-500 hover:text-slate-300 underline">
+                      Forget key
+                    </button>
+                  )}
+                </div>
+                {rememberKey && (
+                  <p className="text-xs text-slate-500">Saved unencrypted in this browser only. Use a key restricted to the Gemini API, and don't check this on a shared computer.</p>
+                )}
                 <div className="flex items-center gap-2 pt-1">
                   <label className="text-xs text-slate-400 shrink-0" htmlFor="gemini-model">Model</label>
                   <select
