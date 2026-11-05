@@ -9,7 +9,8 @@ const DEFAULT_UPSTREAM = 'https://mcp.musicatlas.ai/mcp';
 
 // Lock this down to your GitHub Pages origin (and localhost for dev).
 const ALLOWED_ORIGINS = [
-  'https://pcarenza.github.io',
+  'https://gp-songtools.github.io',
+  'https://pcarenza.github.io', // old address before the repo moved to gp-songtools
   'http://localhost:5173',
   'http://localhost:4173',
 ];
