@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Music, Mic2, Disc, Copy, Check, Sparkles, AlertCircle, Loader2, Play, FileText, MessageSquare, Key, Plug, Radio, Users, ChevronDown, Layers, ListMusic, Eraser, ClipboardList } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Music, Mic2, Disc, Copy, Check, Sparkles, AlertCircle, Loader2, Play, FileText, MessageSquare, Key, Plug, Radio, Users, ChevronDown, Layers, ListMusic, Eraser, ClipboardList, Headphones, Square } from 'lucide-react';
 import { DEFAULT_MCP_URL, DIRECT_MUSICATLAS_URL } from './mcpConfig';
 
 // The MCP SDK is loaded on demand so it doesn't weigh down the first page load.
 const loadMcp = () => import('./mcp');
-import { listModels, pickDefaultModel, fallbackModels, buildPrompt, generateSunoPrompt, fitStylePrompt, formatSections, STYLE_PROMPT_MAX } from './gemini';
+import { listModels, pickDefaultModel, fallbackModels, buildPrompt, generateSunoPrompt, parseSunoText, normalizeYouTubeUrl, fitStylePrompt, STYLE_PROMPT_MAX } from './gemini';
+import { splitBlocks, applyCounts, sectionHeader, meterCheck, formatStructure, formatDuration } from './lyrics';
 
 const readPref = (key, fallback) => {
   try {
@@ -25,11 +26,33 @@ const buildReferenceBlock = (ctx) => {
   if (ctx.similarArtists) sections.push(`SONICALLY SIMILAR ARTISTS:\n${ctx.similarArtists}`);
   if (!sections.length) return '';
   return `
+MUSICATLAS AUDIO ANALYSIS (measured from the actual recording). Use the measured tempo and key exactly. Let the loudness, intensity and density inform the production description. Classifier and genre labels are automatic guesses: trust them only where they fit what you know. Similar tracks and artists are stylistic context only; never name them in your answer.
+<musicatlas>
+${sections.join('\n\n')}
+</musicatlas>
+`;
+};
 
-    REFERENCE DATA (from MusicAtlas audio analysis via MCP). Treat it as ground truth about the sound: use its instrumentation, tempo, energy, rhythm and production details to drive "genre_tags", and use similar artists only as stylistic context. NEVER put any artist or song names in "genre_tags" (Suno rejects them).
-    ---
-    ${sections.join('\n\n')}
-    ---`;
+// Shown before the first run, clearly labelled as an example.
+const EXAMPLE = {
+  example: true,
+  style: 'french house, filter disco, late 90s, 123 BPM, G major, vocoder lead, euphoric\nChopped disco horn and string samples loop through a slowly opening low-pass filter over a four-on-the-floor kick. A side-chained bassline pumps against the kick while a talk-box vocal carries a simple, repeated hook. The arrangement drops to filtered loops in the breakdown, then the full band slams back in. Warm, saturated mix with heavy compression and a wide stereo chorus.',
+  styleTrimmed: false,
+  bpm: '123', key: 'G major', measured: {},
+  stems: [
+    { group: 'Drums & Percussion', prompt: 'Isolated drum stem: four-on-the-floor kick at 123 BPM, open hi-hats on the offbeat, handclaps on 2 and 4, heavily compressed with a short room.' },
+    { group: 'Bass', prompt: 'Isolated bass stem: round synth bass in G major playing a syncopated disco line, side-chained to the kick so it pumps on every beat.' },
+    { group: 'Vocals', prompt: 'Isolated vocal stem: talk-box lead singing a short, repetitive hook, bright and slightly robotic, doubled an octave up in the choruses.' },
+  ],
+  sections: [
+    { name: 'Intro', bars: 8, seconds: 16, lines: 0, rhyme: '-', meter: '-', description: 'A filtered loop slowly opens up.', tags: '[Intro: filtered disco loop, building]' },
+    { name: 'Verse 1', bars: 16, seconds: 31, lines: 4, rhyme: 'AABB', meter: '6.6.7.7', description: 'The groove settles in under the talk-box.', tags: '[Verse 1: talk-box vocal, steady groove]' },
+    { name: 'Chorus', bars: 16, seconds: 31, lines: 4, rhyme: 'AAAA', meter: '5.5.5.5', description: 'The full band hits with the repeated hook.', tags: '[Chorus: full band, euphoric, repeated hook]' },
+    { name: 'Breakdown', bars: 16, seconds: 31, lines: 0, rhyme: '-', meter: '-', description: 'Everything drops to a filtered loop before the return.', tags: '[Breakdown: filtered, sparse, rising tension]' },
+  ],
+  lyrics: '[Intro: filtered disco loop, building]\n\n[Verse 1: talk-box vocal, steady groove]\nHarbor lights are low\nWaiting for the show\nCity calling through the rain\nPulling me back home again\n\n[Chorus: full band, euphoric, repeated hook]\nOne more night out\nOne more night out\nOne more night out\nOne more night out\n\n[Breakdown: filtered, sparse, rising tension]',
+  source: 'Example: structure of a typical french house track',
+  check: '',
 };
 
 
@@ -45,6 +68,21 @@ export default function App() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [copiedSection, setCopiedSection] = useState(null);
+  const [youtube, setYoutube] = useState('');
+  const [status, setStatus] = useState(null); // "Done.", "Stopped." after a run
+  const [showExample, setShowExample] = useState(true);
+  const [startedAt, setStartedAt] = useState(0);
+  const [now, setNow] = useState(0);
+  const [writing, setWriting] = useState(false); // Gemini has started sending text
+  const [mcpStep, setMcpStep] = useState('');
+  const abortRef = useRef(null);
+
+  // Tick once a second while generating, for the elapsed-time status.
+  useEffect(() => {
+    if (!loading) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
 
   // Gemini model: discovered from the API so retired model names can't break the app.
   const [models, setModels] = useState([]);
@@ -114,6 +152,7 @@ export default function App() {
 
 
   const generatePrompt = async () => {
+    if (loading) return;
     if (!artist.trim()) {
       setError('Please enter an artist name.');
       return;
@@ -122,75 +161,133 @@ export default function App() {
       setError('Please paste your Gemini API key.');
       return;
     }
+    const youtubeUrl = youtube.trim() ? normalizeYouTubeUrl(youtube) : '';
+    if (youtube.trim() && !youtubeUrl) {
+      setError("That doesn't look like a YouTube Music song link. Copy it from the song's Share menu; it should contain \"watch?v=\".");
+      return;
+    }
 
+    const ctl = new AbortController();
+    abortRef.current = ctl;
     setLoading(true);
     setError(null);
-    setResult(null);
+    setStatus(null);
+    setShowExample(false);
     setModelUsed(null);
     setGenStatus(null);
     setMcpContext(null);
     setMcpWarning(null);
     setShowRaw(false);
+    setWriting(false);
+    setStartedAt(Date.now());
+    setNow(Date.now());
+
+    const pasted = lyrics.trim();
+    const blocks = pasted ? splitBlocks(pasted).slice(0, 40) : [];
+    const source = blocks.length ? 'Lines and syllables (green) counted from your pasted lyrics. Section names, rhyme and tags by Gemini.'
+      : youtubeUrl ? 'Heard by Gemini from the YouTube Music recording. Paste the lyrics for exact line and syllable counts.'
+      : song.trim() ? "Gemini's estimate from its knowledge of the song. Paste the lyrics for exact counts."
+      : 'Typical structure for this artist (no song given)';
+    let measured = {};
+    // Parsed text + the app's own counts + MusicAtlas's measured tempo/key.
+    const compose = (text, final) => {
+      const p = parseSunoText(text, final);
+      const sections = applyCounts(p.sections, blocks);
+      const style = final ? fitStylePrompt(p.style) : { text: p.style, trimmed: false };
+      return {
+        ...p, sections, style: style.text, styleTrimmed: style.trimmed,
+        bpm: measured.bpm || p.bpm, key: measured.key || p.key,
+        measured: { bpm: !!measured.bpm, key: !!measured.key },
+        source, streaming: !final, check: final ? meterCheck(sections, p.lyrics) : '',
+      };
+    };
+    setResult(compose('', false));
+    const finish = () => { setGenStatus(null); setLoading(false); setMcpStage(null); abortRef.current = null; };
 
     // Step 1: ground the request in real audio data via MCP (best effort).
     let ctx = null;
     if (useMcp && mcpUrl.trim()) {
       setMcpStage('mcp');
+      setMcpStep('connecting');
       try {
         const { gatherMusicContext } = await loadMcp();
-        ctx = await gatherMusicContext(mcpUrl.trim(), { artist: artist.trim(), song: song.trim() });
+        ctx = await gatherMusicContext(mcpUrl.trim(), { artist: artist.trim(), song: song.trim() }, setMcpStep);
+        measured = ctx.measured || {};
         setMcpContext(ctx);
         if (ctx.warnings.length) setMcpWarning(ctx.warnings.join(' | '));
       } catch (err) {
         setMcpWarning(`${err.message} Continuing without MusicAtlas data.`);
       }
+      if (ctl.signal.aborted) {
+        setResult(null);
+        setStatus('Stopped.');
+        return finish();
+      }
+      setResult(compose('', false));
     }
     setMcpStage('llm');
+    setStartedAt(Date.now());
 
     try {
       let chosenModel = models.includes(model) ? model : '';
       let available = models;
       if (!chosenModel) ({ chosen: chosenModel, ids: available } = await loadModels(customKey.trim()));
       if (!chosenModel) throw new Error('Could not find a Gemini model for this API key. Check the key.');
-      const { result: parsed, modelUsed: used } = await generateSunoPrompt({
+      const { text, truncated, modelUsed: used } = await generateSunoPrompt({
         apiKey: customKey.trim(),
         model: chosenModel,
         fallbacks: fallbackModels(available, chosenModel),
+        youtubeUrl,
+        signal: ctl.signal,
         onStatus: setGenStatus,
+        onText: (t) => { setWriting(true); setResult(compose(t, false)); },
         prompt: buildPrompt({
           artist: artist.trim(),
           song: song.trim(),
           topic: topic.trim(),
-          lyrics: lyrics.trim(),
+          lyrics: pasted,
+          blocks,
           reference: buildReferenceBlock(ctx),
+          hasAudio: !!youtubeUrl,
         }),
       });
-      const style = fitStylePrompt(parsed.genre_tags);
-      setResult({
-        ...parsed,
-        genre_tags: style.text,
-        styleTrimmed: style.trimmed,
-        stems: Array.isArray(parsed.stems) ? parsed.stems : [],
-        sections: Array.isArray(parsed.sections) ? parsed.sections : [],
-        structureSource: lyrics.trim() ? 'lyrics' : song.trim() ? 'song' : 'artist',
-      });
+      const r = compose(text, true);
+      setResult(r);
       setModelUsed(used);
+      if (!r.style || !r.sections.length) setError("Gemini's answer was missing some parts. Press Generate to try again.");
+      else if (truncated) setError('Gemini ran out of room before finishing. Press Generate to try again.');
+      else setStatus('Done.');
     } catch (err) {
       console.error(err);
-      setError(err.message);
+      setResult(err.partial ? compose(err.partial, true) : null);
+      if (err.cancelled) setStatus('Stopped.');
+      else {
+        setError(err.message + (youtubeUrl && err.status === 400
+          ? ' Gemini could not open the YouTube Music link: the track must be public, not age-restricted, and available in your region.'
+          : ''));
+      }
     }
-    setGenStatus(null);
-    setLoading(false); setMcpStage(null);
+    finish();
   };
+
+  const stopGenerating = () => abortRef.current?.abort();
 
   // Clears the song inputs and results; keeps the API key, model and MCP settings.
   const clearAll = () => {
-    setArtist(''); setSong(''); setTopic(''); setLyrics('');
+    setArtist(''); setSong(''); setTopic(''); setLyrics(''); setYoutube('');
     setResult(null); setError(null); setModelUsed(null); setGenStatus(null);
     setMcpContext(null); setMcpWarning(null); setShowRaw(false);
+    setShowExample(false); setStatus('Cleared. Enter an artist and press Generate.');
   };
 
-  const copyToClipboard = (text, section) => {
+  const copyToClipboard = async (text, section) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedSection(section);
+      setTimeout(() => setCopiedSection(null), 2000);
+      return;
+    } catch { /* clipboard API blocked: fall back to a hidden textarea */ }
     const textArea = document.createElement("textarea");
     textArea.value = text;
     document.body.appendChild(textArea);
@@ -205,6 +302,22 @@ export default function App() {
     document.body.removeChild(textArea);
   };
 
+  const view = result || (showExample ? EXAMPLE : null);
+  const total = view ? view.sections.reduce((a, sec) => a + (Number(sec.seconds) || 0), 0) : 0;
+  const elapsed = Math.max(0, Math.round((now - startedAt) / 1000));
+  const liveStatus = mcpStage === 'mcp' ? `Asking MusicAtlas: ${mcpStep}...`
+    : `${model || 'Gemini'} is ${writing ? 'writing' : youtube.trim() ? 'listening' : 'thinking'}... ${elapsed}s`;
+  const waiting = (text) => <span className="text-sm italic text-slate-500">{text}</span>;
+  const copyButton = (text, id, label = 'Copy') => (
+    <button
+      onClick={() => copyToClipboard(text, id)}
+      className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-2 border border-slate-700 shrink-0"
+    >
+      {copiedSection === id ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      {copiedSection === id ? 'Copied' : label}
+    </button>
+  );
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-purple-500 selection:text-white pb-12">
       <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
@@ -218,7 +331,7 @@ export default function App() {
             </h1>
           </div>
           <span className="text-xs font-medium px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">
-            v4.1 Gemini + MCP
+            v5.0 Gemini + MCP
           </span>
         </div>
       </header>
@@ -293,9 +406,29 @@ export default function App() {
                 />
                 {lyrics.trim() && (
                   <p className="text-xs text-sky-400">
-                    {lyrics.trim().split('\n').filter((l) => l.trim()).length} lines pasted. The structure will be measured from them.
+                    {lyrics.trim().split('\n').filter((l) => l.trim()).length} lines pasted. The app will count their lines and syllables exactly.
                   </p>
                 )}
+              </div>
+
+              <div className="mb-6 space-y-2">
+                <label className="text-sm font-medium text-slate-300 flex items-center gap-2" htmlFor="youtube-link">
+                  <Headphones className="w-4 h-4 text-red-400" /> YouTube Music Link <span className="text-xs text-slate-500">(Optional, Gemini listens to it)</span>
+                </label>
+                <input
+                  id="youtube-link"
+                  type="url"
+                  inputMode="url"
+                  value={youtube}
+                  onChange={(e) => setYoutube(e.target.value)}
+                  placeholder="https://music.youtube.com/watch?v=..."
+                  autoComplete="off"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                  onKeyDown={(e) => e.key === 'Enter' && generatePrompt()}
+                />
+                <p className="text-xs text-slate-500">
+                  Gemini hears the actual recording for instruments, vocals, production and structure. Free on Gemini's free tier (Google allows about 8 hours of YouTube audio a day); a key with billing turned on pays for roughly 25,000 tokens per 4-minute song. The track must be public.
+                </p>
               </div>
 
               <div className="mb-6 space-y-3 border-t border-slate-800 pt-6">
@@ -407,49 +540,67 @@ export default function App() {
                   </>
                 )}
               </button>
+              {loading ? (
+                <button
+                  type="button"
+                  onClick={stopGenerating}
+                  title="Stop generating and keep what has been written so far"
+                  className="px-5 rounded-xl border border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center gap-2"
+                >
+                  <Square className="w-4 h-4 fill-current" /> Stop
+                </button>
+              ) : (
               <button
                 type="button"
                 onClick={clearAll}
-                disabled={loading}
                 title="Clear the song fields and results (keeps your key and settings)"
-                className="px-5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium flex items-center gap-2"
               >
                 <Eraser className="w-4 h-4" /> Clear
               </button>
+              )}
               </div>
             </div>
           </div>
 
           {/* Right Panel: Output */}
-          <div className="lg:col-span-7">
-            {result ? (
+          <div className="lg:col-span-7 space-y-6">
+            {(loading || status || view?.example) && (
+              <div className="flex items-center gap-3 flex-wrap text-sm text-slate-400 min-h-6" aria-live="polite">
+                {view?.example && !loading && (
+                  <span className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded-full border border-amber-400/70 text-amber-300">Example output</span>
+                )}
+                {loading && <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" aria-hidden="true" />}
+                <span>{loading ? liveStatus : status || 'Fill in an artist and press Generate. Below is what a result looks like.'}</span>
+                {loading && genStatus && <span className="text-amber-300">{genStatus}</span>}
+              </div>
+            )}
+            {view ? (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-slate-900 rounded-2xl border border-purple-500/30 overflow-hidden shadow-2xl shadow-purple-900/10">
                   <div className="bg-slate-800/50 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
                     <h3 className="font-semibold text-purple-300 flex items-center gap-2">
                       <Play className="w-4 h-4 fill-current" /> Suno Style Prompt
                     </h3>
-                    <button
-                      onClick={() => copyToClipboard(result.genre_tags, 'tags')}
-                      className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-2 border border-slate-700"
-                    >
-                      {copiedSection === 'tags' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                      {copiedSection === 'tags' ? 'Copied' : 'Copy'}
-                    </button>
+                    {copyButton(view.style, 'tags')}
                   </div>
                   <div className="p-6">
-                    <p className="text-base leading-relaxed text-slate-200 whitespace-pre-wrap">
-                      {result.genre_tags}
-                    </p>
+                    {view.style ? (
+                      <p className="text-base leading-relaxed text-slate-200 whitespace-pre-wrap">
+                        <span className="block mb-2 font-medium text-slate-100">{view.style.split('\n')[0]}</span>
+                        {view.style.split('\n').slice(1).join('\n').trim()}
+                      </p>
+                    ) : waiting(view.streaming ? 'Writing the style prompt...' : 'No style prompt.')}
+                    {view.style && (
                     <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                       <span className={
-                        result.genre_tags.length > STYLE_PROMPT_MAX ? 'text-red-400 font-medium'
-                          : result.genre_tags.length > STYLE_PROMPT_MAX * 0.9 ? 'text-amber-300 font-medium'
+                        view.style.length > STYLE_PROMPT_MAX ? 'text-red-400 font-medium'
+                          : view.style.length > STYLE_PROMPT_MAX * 0.9 ? 'text-amber-300 font-medium'
                           : 'text-emerald-400 font-medium'
                       }>
-                        {result.genre_tags.length.toLocaleString()} / {STYLE_PROMPT_MAX.toLocaleString()} chars
+                        {view.style.length.toLocaleString()} / {STYLE_PROMPT_MAX.toLocaleString()} chars
                       </span>
-                      {result.styleTrimmed && (
+                      {view.styleTrimmed && (
                         <>
                           <span className="w-1 h-1 rounded-full bg-slate-600"></span>
                           <span className="text-amber-300">Shortened to fit</span>
@@ -466,96 +617,128 @@ export default function App() {
                         </>
                       )}
                     </div>
+                    )}
                   </div>
                 </div>
 
-                {result.stems.length > 0 && (
-                  <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg">
-                    <h4 className="font-medium text-amber-300 uppercase tracking-wider text-xs flex items-center gap-2 mb-1">
-                      <Layers className="w-4 h-4" /> Stem Layer Prompts
+                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg">
+                  <h4 className="font-medium text-amber-300 uppercase tracking-wider text-xs flex items-center gap-2 mb-1">
+                    <Layers className="w-4 h-4" /> Stem Layer Prompts
+                  </h4>
+                  <p className="text-xs text-slate-500 mb-4">One prompt per instrument group, each for generating that layer on its own in Suno.</p>
+                  {view.stems.length === 0 && waiting(view.streaming ? 'Waiting for stem prompts...' : 'No stem prompts.')}
+                  <div className="space-y-3">
+                    {view.stems.map((stem, i) => (
+                      <div key={i} className="bg-slate-950 rounded-xl border border-slate-800/70 overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800/70">
+                          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: STEM_COLORS[i % STEM_COLORS.length] }}>
+                            {stem.group}
+                          </span>
+                          {copyButton(stem.prompt, `stem-${i}`)}
+                        </div>
+                        <p className="px-4 py-3 text-sm text-slate-300 leading-relaxed">{stem.prompt}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg">
+                  <div className="flex justify-between items-start mb-4 gap-3">
+                    <h4 className="font-medium text-emerald-400 uppercase tracking-wider text-xs flex items-center gap-2">
+                      <ListMusic className="w-4 h-4" /> Song Structure & Meter
                     </h4>
-                    <p className="text-xs text-slate-500 mb-4">One prompt per instrument group, each for generating that layer on its own in Suno.</p>
-                    <div className="space-y-3">
-                      {result.stems.map((stem, i) => (
-                        <div key={i} className="bg-slate-950 rounded-xl border border-slate-800/70 overflow-hidden">
-                          <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800/70">
-                            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: STEM_COLORS[i % STEM_COLORS.length] }}>
-                              {stem.group}
-                            </span>
-                            <button
-                              onClick={() => copyToClipboard(stem.prompt, `stem-${i}`)}
-                              className="text-xs font-medium px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-1.5 border border-slate-700"
-                            >
-                              {copiedSection === `stem-${i}` ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                              {copiedSection === `stem-${i}` ? 'Copied' : 'Copy'}
-                            </button>
+                    {copyButton(formatStructure(view), 'struct')}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {[
+                      [view.bpm, view.measured?.bpm ? 'BPM · measured' : 'BPM'],
+                      [view.key, view.measured?.key ? 'Key · measured' : 'Key'],
+                      [total ? formatDuration(total) : '', 'Length'],
+                      [view.sections.length ? String(view.sections.length) : '', 'Sections'],
+                    ].filter(([v]) => v).map(([v, label]) => (
+                      <div key={label} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 min-w-[92px] flex flex-col">
+                        <span className="font-mono text-base text-slate-100">{v}</span>
+                        <span className={`text-[10px] uppercase tracking-wider ${label.includes('measured') ? 'text-emerald-400' : 'text-slate-500'}`}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {total > 0 && (
+                    <>
+                      <div className="flex h-7 rounded-md overflow-hidden border border-slate-800" aria-hidden="true">
+                        {view.sections.map((sec, i) => (
+                          <div
+                            key={i}
+                            title={`${sec.name} · ${sec.seconds}s`}
+                            style={{ flex: `0 0 ${((Number(sec.seconds) || 0) / total) * 100}%`, background: STEM_COLORS[i % STEM_COLORS.length] }}
+                            className="min-w-[2px] flex items-center px-1.5 text-[10px] font-mono text-slate-900 whitespace-nowrap overflow-hidden border-r border-slate-950"
+                          >
+                            {sec.name}
                           </div>
-                          <p className="px-4 py-3 text-sm text-slate-300 leading-relaxed">{stem.prompt}</p>
+                        ))}
+                      </div>
+                      <div className="flex justify-between text-[11px] font-mono text-slate-500 mt-1 mb-4" aria-hidden="true">
+                        <span>0:00</span><span>{formatDuration(total)}</span>
+                      </div>
+                    </>
+                  )}
+                  {view.sections.length === 0 && waiting(view.streaming ? 'Waiting for the structure...' : 'No structure.')}
+                  <div className="space-y-3">
+                    {view.sections.map((sec, i) => (
+                      <div key={i} className="bg-slate-950 rounded-xl border border-slate-800/70 px-4 py-3">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                          <span className="text-sm font-mono text-slate-100 flex items-start gap-2 min-w-0 break-words">
+                            <i className="w-2.5 h-2.5 rounded-sm shrink-0 mt-1" style={{ background: STEM_COLORS[i % STEM_COLORS.length] }} />
+                            {sectionHeader(sec)}
+                          </span>
+                          <span className="text-xs font-mono text-slate-400">
+                            <b className="text-slate-200 font-medium">{sec.bars} bars</b> · {sec.seconds}s · {sec.lines > 0
+                              ? (sec.counted
+                                ? <><span className="text-emerald-400" title="Counted by the app from your pasted lyrics">{sec.lines} lines · {sec.meter}</span> · {sec.rhyme}</>
+                                : `${sec.lines} lines · ${sec.rhyme} · ${sec.meter}`)
+                              : 'instrumental'}
+                          </span>
                         </div>
-                      ))}
-                    </div>
+                        {sec.description && <p className="text-sm text-slate-400 mt-1.5">{sec.description}</p>}
+                        {sec.counted && (
+                          <details className="mt-2 text-xs">
+                            <summary className="cursor-pointer text-slate-500">Syllables per line</summary>
+                            <ol className="mt-1.5 font-mono text-slate-500 space-y-0.5">
+                              {sec.counted.lines.map((line, k) => (
+                                <li key={k}><b className="inline-block min-w-[2.2em] text-slate-200 font-medium">{sec.counted.syl[k]}</b>{line}</li>
+                              ))}
+                            </ol>
+                          </details>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                )}
+                  <p className="text-xs text-slate-500 mt-3">
+                    {view.source ? `${view.source} · ` : ''}Rhyme letters mark end-rhyme groups · meter is syllables per line
+                  </p>
+                </div>
 
-                {result.sections.length > 0 && (
-                  <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg">
-                    <div className="flex justify-between items-start mb-1 gap-3">
-                      <h4 className="font-medium text-emerald-400 uppercase tracking-wider text-xs flex items-center gap-2">
-                        <ListMusic className="w-4 h-4" /> Song Structure & Meter
-                      </h4>
-                      <button
-                        onClick={() => copyToClipboard(formatSections(result.sections), 'struct')}
-                        className="text-xs font-medium px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-1.5 border border-slate-700 shrink-0"
-                      >
-                        {copiedSection === 'struct' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                        {copiedSection === 'struct' ? 'Copied' : 'Copy'}
-                      </button>
-                    </div>
-                    <p className="text-xs text-slate-500 mb-4">
-                      {result.tempo_bpm ? `${result.tempo_bpm} BPM` : ''}{result.tempo_bpm && result.key ? ' · ' : ''}{result.key || ''}
-                      {(result.tempo_bpm || result.key) ? ' · ' : ''}
-                      {result.structureSource === 'lyrics' ? 'Measured from your pasted lyrics'
-                        : result.structureSource === 'song' ? "Estimated from Gemini's knowledge of the song. Paste the lyrics for exact counts."
-                        : 'Typical structure for this artist (no song given)'}
-                    </p>
-                    <div className="space-y-3">
-                      {result.sections.map((sec, i) => (
-                        <div key={i} className="bg-slate-950 rounded-xl border border-slate-800/70 px-4 py-3">
-                          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                            <span className="text-sm font-semibold text-slate-100 uppercase tracking-wide">{sec.name}</span>
-                            <span className="text-xs font-mono text-slate-400">
-                              {sec.bars} bars · {sec.seconds}s · {sec.lines > 0 ? `${sec.lines} lines · ${sec.rhyme} · ${sec.meter}` : 'instrumental'}
-                            </span>
-                          </div>
-                          <p className="text-sm text-slate-400 mt-1.5">{sec.description}</p>
-                          <p className="text-xs font-mono text-emerald-300/90 mt-2">{sec.suno_tags}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-3">Rhyme letters mark end-rhyme groups · meter is syllables per line</p>
+                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg hover:border-slate-700 transition-colors">
+                  <div className="flex justify-between items-start mb-4">
+                    <h4 className="font-medium text-indigo-400 uppercase tracking-wider text-xs flex items-center gap-2">
+                      <FileText className="w-4 h-4" /> Sample Lyrics (Suno Ready)
+                    </h4>
+                    {copyButton(view.lyrics, 'lyrics', 'Copy Lyrics')}
                   </div>
-                )}
-
-                <div className="grid grid-cols-1 gap-6">
-                  <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg hover:border-slate-700 transition-colors ">
-                    <div className="flex justify-between items-start mb-4">
-                      <h4 className="font-medium text-indigo-400 uppercase tracking-wider text-xs flex items-center gap-2">
-                        <FileText className="w-4 h-4" /> Sample Lyrics (Suno Ready)
-                      </h4>
-                      <button
-                        onClick={() => copyToClipboard(result.sample_lyrics, 'lyrics')}
-                        className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-2 border border-slate-700"
-                      >
-                        {copiedSection === 'lyrics' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                        {copiedSection === 'lyrics' ? 'Copied' : 'Copy Lyrics'}
-                      </button>
-                    </div>
-                    <div className="bg-slate-950 p-6 rounded-xl border border-slate-800/50">
-                      <p className="text-slate-300 whitespace-pre-wrap font-mono text-sm leading-relaxed">
-                        {result.sample_lyrics}
-                      </p>
-                    </div>
+                  <div className="bg-slate-950 p-6 rounded-xl border border-slate-800/50">
+                    {view.lyrics ? (
+                      <pre className="text-slate-300 whitespace-pre-wrap font-mono text-sm leading-relaxed">
+                        {view.lyrics.split('\n').map((line, i) => (
+                          <React.Fragment key={i}>
+                            {/^\s*\[.*\]\s*$/.test(line) ? <span className="text-amber-300">{line}</span> : line}{'\n'}
+                          </React.Fragment>
+                        ))}
+                      </pre>
+                    ) : waiting(view.streaming ? 'Waiting for lyrics...' : 'No lyrics.')}
                   </div>
+                  <p className="text-xs text-slate-500 mt-3">
+                    Original lyrics written to fit the structure above, with Suno section tags. Paste into Suno's lyrics box.
+                    {view.check && <span className="text-slate-400"> · {view.check}</span>}
+                  </p>
                 </div>
 
                 {mcpContext && mcpContext.toolsUsed.length > 0 && (
@@ -566,7 +749,7 @@ export default function App() {
                       className="w-full flex justify-between items-center text-left"
                     >
                       <h4 className="font-medium text-emerald-400 uppercase tracking-wider text-xs flex items-center gap-2">
-                        <Users className="w-4 h-4" /> MusicAtlas Reference Data (via MCP)
+                        <Users className="w-4 h-4" /> MusicAtlas Data Gemini Used
                       </h4>
                       <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showRaw ? 'rotate-180' : ''}`} />
                     </button>
@@ -592,7 +775,6 @@ export default function App() {
                   <div className="flex flex-col items-center animate-in fade-in duration-300">
                     <Loader2 className="w-12 h-12 animate-spin text-purple-500 mb-6" />
                     <p className="text-lg text-slate-300 font-medium">{mcpStage === 'mcp' ? 'Fetching audio analysis over MCP...' : 'Analyzing Musical Style...'}</p>
-                    {genStatus && <p className="text-sm mt-2 text-amber-300">{genStatus}</p>}
                     <p className="text-sm mt-2 max-w-sm">Generating Suno.ai tags, song structure, and writing original lyrics.</p>
                   </div>
                 ) : (

@@ -75,27 +75,67 @@ export async function callTool(client, tools, name, args) {
   return text;
 }
 
+const take = (arr, n) => (Array.isArray(arr) ? arr.slice(0, n) : []);
+const parseJson = (text) => { try { const v = JSON.parse(text); return v && typeof v === 'object' ? v : null; } catch { return null; } };
+
+// Turn MusicAtlas's JSON into short labelled lines for the prompt and the data panel.
+function summarize(tool, payload) {
+  if (tool === 'describe_track') {
+    const mc = payload.music_characteristics || {};
+    const ac = payload.audio_characteristics || {};
+    const vp = payload.classifications?.vocal_profile;
+    return [
+      mc.bpm != null && `Measured tempo: ${Math.round(mc.bpm * 10) / 10} BPM`,
+      mc.key && `Measured key: ${mc.key}${mc.mode ? ` ${mc.mode}` : ''}`,
+      ac.loudness_lufs != null && `Loudness: ${ac.loudness_lufs} LUFS`,
+      ac.perceived_intensity && `Perceived intensity: ${ac.perceived_intensity}`,
+      ac.frequency_density && `Frequency density: ${ac.frequency_density}`,
+      vp?.label && `Vocal profile (classifier guess, may be wrong): ${vp.label} (${vp.confidence})`,
+      payload.genres?.length && `Genre tags (automatic, some may be noise): ${payload.genres.join(', ')}`,
+    ].filter(Boolean).join('\n');
+  }
+  if (tool === 'find_similar_tracks') {
+    const list = take(payload.matches, 12).map((t) => `${t.artist} – ${t.title}`).join('\n');
+    return list + (payload.hashtags?.length ? `\nTags: ${payload.hashtags.join(' ')}` : '');
+  }
+  if (tool === 'find_similar_artists') {
+    return take(payload.artists, 10).map((a) => {
+      const ex = a.examples?.[0];
+      return ex ? `${a.name} (e.g. "${ex.match_track}" sounds like "${ex.seed_track}")` : a.name;
+    }).join('\n');
+  }
+  return '';
+}
+
 /**
  * Pull reference data for an artist (and optional song) from the MCP server.
  * Each tool call is independent; one failing doesn't sink the others.
+ * `measured` holds MusicAtlas's tempo and key when describe_track returned them.
  */
-export async function gatherMusicContext(url, { artist, song }) {
+export async function gatherMusicContext(url, { artist, song }, onStep) {
   const { client, tools } = await connectMcp(url);
   const calls = [];
   if (song) {
-    calls.push(['trackAnalysis', 'describe_track', { artist, track: song }]);
-    calls.push(['similarTracks', 'find_similar_tracks', { artist, track: song }]);
+    calls.push(['trackAnalysis', 'describe_track', { artist, track: song }, 'audio analysis']);
+    calls.push(['similarTracks', 'find_similar_tracks', { artist, track: song }, 'similar tracks']);
   }
-  calls.push(['similarArtists', 'find_similar_artists', { artist }]);
+  calls.push(['similarArtists', 'find_similar_artists', { artist }, 'similar artists']);
 
   // One call at a time: when the calls ran in parallel, MusicAtlas answered
   // all but the first with server errors (likely a concurrency limit).
-  const context = { toolsUsed: [], warnings: [] };
-  for (const [key, tool, args] of calls) {
+  const context = { toolsUsed: [], warnings: [], measured: {} };
+  for (const [key, tool, args, label] of calls) {
+    onStep?.(label);
     try {
       const text = await callWithRetry(() => callTool(client, tools, tool, args));
       if (text) {
-        context[key] = text;
+        const payload = parseJson(text);
+        const mc = payload?.music_characteristics;
+        if (tool === 'describe_track' && mc) {
+          if (mc.bpm != null) context.measured.bpm = String(Math.round(mc.bpm));
+          if (mc.key) context.measured.key = `${mc.key}${mc.mode ? ` ${mc.mode}` : ''}`;
+        }
+        context[key] = (payload && summarize(tool, payload)) || text.slice(0, 3000);
         context.toolsUsed.push(tool);
       }
     } catch (err) {

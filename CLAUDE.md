@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Suno prompt generator: artist/song/topic/lyrics → style prompt, stem prompts, section structure, lyrics.
+Suno prompt generator: artist/song/topic/lyrics/YouTube Music link → style prompt, stem prompts, section structure, lyrics.
 React 19 + Vite 7, plain JavaScript (no TypeScript, no test suite). Gemini REST API + MusicAtlas MCP. Deployed to GitHub Pages.
 
 ## Commands (run from repo root; keep output quiet)
@@ -20,7 +20,8 @@ React 19 + Vite 7, plain JavaScript (no TypeScript, no test suite). Gemini REST 
 index.html            → loads /src/main.jsx (also a leftover Tailwind play-CDN <script>)
 src/main.jsx          → mounts <App/>, imports index.css
 src/App.jsx           → ALL UI + state (useState/useEffect only; no router, no store)
-  ├─ src/gemini.js    → Gemini client + prompt + schema (no React)
+  ├─ src/gemini.js    → Gemini streaming client + prompt + @@-marker parser + YouTube URL normalizer (no React)
+  ├─ src/lyrics.js    → syllable/line counting, block splitting, section headers, meter check (no React)
   ├─ src/mcp.js       → MCP client, loaded via dynamic import() (no React)
   └─ src/mcpConfig.js → DEFAULT_MCP_URL, DIRECT_MUSICATLAS_URL (no imports)
 src/index.css         → `@import "tailwindcss"` + base bg
@@ -28,21 +29,23 @@ mcp-proxy/worker.js   → Cloudflare Worker CORS proxy for MusicAtlas (separate 
 vite.config.js        → react() + tailwindcss(); base '/suno-style-creator/' (must match repo name)
 .github/workflows/deploy.yml → push to main: npm ci + build → gh-pages branch
 ```
-- Dependency direction: App → gemini, mcp, mcpConfig; mcp → mcpConfig. gemini.js and mcp.js never import React or App.
+- Dependency direction: App → gemini, lyrics, mcp, mcpConfig; mcp → mcpConfig. gemini.js, lyrics.js and mcp.js never import React or App.
 - Keep `mcp.js` behind `import()` (it pulls in the ~390 KB MCP SDK); mcpConfig.js stays separate so App can read the URL without loading the SDK.
 - `src/assets/react.svg` is unused template leftover; `public/vite.svg` is the favicon.
 
 ## Request flow (App.generatePrompt)
 1. Validate artist + Gemini key.
-2. If MCP enabled: `gatherMusicContext(url, {artist, song})` → describe_track, find_similar_tracks (song only), find_similar_artists.
-3. `buildPrompt({artist, song, topic, lyrics, reference})` → `generateSunoPrompt({apiKey, model, fallbacks, prompt, onStatus})`.
-4. `fitStylePrompt(genre_tags)` trims to STYLE_PROMPT_MAX at a sentence boundary; render cards.
+2. Pasted lyrics → `splitBlocks` (the app counts lines/syllables; Gemini only names blocks "#1", "#2").
+3. If MCP enabled: `gatherMusicContext(url, {artist, song}, onStep)` → describe_track, find_similar_tracks (song only), find_similar_artists; returns summarized text + `measured` {bpm, key}, which override Gemini's values.
+4. `buildPrompt({artist, song, topic, lyrics, blocks, reference, hasAudio})` → `generateSunoPrompt({..., youtubeUrl, signal, onText})` streams via `streamGenerateContent?alt=sse`; each chunk → `parseSunoText` + `applyCounts` → re-render. Stop aborts and keeps partial text.
+5. Final: `fitStylePrompt(style)` trims to STYLE_PROMPT_MAX at a sentence boundary; `meterCheck` compares lyrics to the target meter.
 
 ## Conventions & guardrails
-- Gemini response schema (gemini.js SUNO_SCHEMA): `genre_tags, tempo_bpm, key, stems[{group,prompt}], sections[{name,bars,seconds,lines,rhyme,meter,description,suno_tags}], sample_lyrics`. Changing a field means updating schema, buildPrompt, and App rendering together.
+- Gemini reply is plain text with markers (no JSON schema, so it can stream): `@@STYLE`, `@@TEMPO` (bpm:/key:), `@@STEMS` (`group || prompt`), `@@STRUCTURE` (`name || bars || seconds || lines-or-#block || rhyme || meter || description || suno tag`), `@@LYRICS`, `@@END`. Changing a field means updating buildPrompt, parseSunoText and App rendering together.
+- YouTube Music input: `normalizeYouTubeUrl` → `fileData.fileUri` part + `mediaResolution: MEDIA_RESOLUTION_LOW`. Only YouTube links (Gemini can't fetch Spotify). Public tracks only.
 - `STYLE_PROMPT_MAX = 1000` (user's choice; do not raise). The style prompt never contains artist or song names (Suno rejects them).
 - Gemini REST: `v1beta`, key in the `?key=` query param (not a header). Model is discovered via ListModels; never hardcode a model id (gemini-2.5-flash was shut down 2026-10-16).
-- Errors: throw `GeminiError(msg, {retryable, busy})`. `busy` (503/429/timeout) → retry once, then next model from `fallbackModels`. Request timeout 120 s.
+- Errors: throw `GeminiError(msg, {retryable, busy, status, cancelled, partial})`. `busy` (503/429/timeout) → retry once, then next model from `fallbackModels`; never retry once text has streamed. Idle timeout 120 s between chunks.
 - MusicAtlas: call tools ONE AT A TIME (parallel calls return 500 "non-JSON response"); retry once on 5xx/timeout. Browser can't reach it directly (no CORS) → default URL is the proxy.
 - Proxy: origin allowlist in worker.js (`pcarenza.github.io`, localhost:5173/4173); `UPSTREAM` env var overrides the target.
 - localStorage keys: `gemini.model`, `mcp.enabled`, `mcp.url`. Always wrap access in try/catch (readPref/writePref helpers). A saved `DIRECT_MUSICATLAS_URL` is migrated to the proxy on load.
