@@ -139,7 +139,14 @@ export async function gatherMusicContext(url, { artist, song }, onStep) {
         context.toolsUsed.push(tool);
       }
     } catch (err) {
-      context.warnings.push(`${tool}: ${err?.message || err}`);
+      // 404 means MusicAtlas doesn't know this artist/track yet: a different spelling,
+      // or a recording it only started analysing on this request (takes about a minute).
+      if (/\(404\)/.test(err?.message || '')) {
+        const subject = args.track ? `"${args.track}" by ${artist}` : `"${artist}"`;
+        context.warnings.push(`MusicAtlas has no ${label} data for ${subject} yet. If it's a newer release, MusicAtlas may still be analysing it: try again in a minute. Otherwise check the spelling. Continued without it.`);
+      } else {
+        context.warnings.push(`${tool}: ${err?.message || err}`);
+      }
     }
   }
 
