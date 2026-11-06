@@ -133,8 +133,8 @@ One line per section, in song order. ${structureRule}
 Format: <section name> || <bars> || <seconds> || <lyric lines> || <rhyme> || <meter> || <description> || <suno tag>
 - seconds: the section's length at the song's tempo (in 4/4: bars x 4 x 60 / BPM, rounded).
 - lyric lines: 0 for instrumental sections.
-- rhyme: end-rhyme letters such as ABAB or AABB; "-" if instrumental.
-- meter: syllables per line as a dot-separated pattern such as 8.7.8.7 (the most common pattern if it varies); "-" if instrumental. Never leave it out for a sung section.
+- rhyme: one end-rhyme letter per lyric line, such as ABABCDCD for 8 lines; "-" if instrumental.
+- meter: syllables for every lyric line as a dot-separated list, one number per line, such as 8.7.8.7.8.7.8.7 for 8 lines; "-" if instrumental. Never leave it out for a sung section.
 - description: one plain sentence on what the section does emotionally or structurally, noting variations (e.g. "Chorus 2 adds a second vocal layer").
 - suno tag: the Suno section header: the section name, a colon, then style hints for energy, instrumentation, vocal style and mood, such as [Chorus: full band, soaring vocals, anthemic].
 @@LYRICS

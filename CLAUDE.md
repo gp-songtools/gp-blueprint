@@ -42,6 +42,7 @@ vite.config.js        → react() + tailwindcss(); base '/suno-style-creator/' (
 
 ## Conventions & guardrails
 - Gemini reply is plain text with markers (no JSON schema, so it can stream): `@@STYLE`, `@@TEMPO` (bpm:/key:), `@@STEMS` (`group || prompt`), `@@STRUCTURE` (`name || bars || seconds || lines-or-#block || rhyme || meter || description || suno tag`), `@@LYRICS`, `@@END`. Changing a field means updating buildPrompt, parseSunoText and App rendering together.
+- Structure copy text (`formatStructure`) is a contract with Lyricpad (`gp-songtools/lyricpad`), which parses it: see `docs/structure-format.md`. Rhyme and syllables are one value per lyric line. Change the format only together with that doc and Lyricpad's parser.
 - YouTube Music input: `normalizeYouTubeUrl` → `fileData.fileUri` part + `mediaResolution: MEDIA_RESOLUTION_LOW`. Only YouTube links (Gemini can't fetch Spotify). Public tracks only.
 - `STYLE_PROMPT_MAX = 1000` (user's choice; do not raise). The style prompt never contains artist or song names (Suno rejects them).
 - Gemini REST: `v1beta`, key in the `?key=` query param (not a header). Model is discovered via ListModels; never hardcode a model id (gemini-2.5-flash was shut down 2026-10-16).
