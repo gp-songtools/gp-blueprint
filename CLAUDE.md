@@ -17,7 +17,7 @@ React 19 + Vite 7, plain JavaScript (no TypeScript, no test suite). Gemini REST 
 
 ## Architecture
 ```
-index.html            → loads /src/main.jsx (also a leftover Tailwind play-CDN <script>)
+index.html            → loads /src/main.jsx
 src/main.jsx          → mounts <App/>, imports index.css
 src/App.jsx           → ALL UI + state (useState/useEffect only; no router, no store)
   ├─ src/gemini.js    → Gemini streaming client + prompt + @@-marker parser + YouTube URL normalizer (no React)
