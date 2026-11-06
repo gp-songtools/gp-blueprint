@@ -53,7 +53,7 @@ ${f.slice(0,2e4)}
 `:"")+T.map(M=>[fm(M),(M.lines>0?`${M.bars} bars (${M.seconds} secs / ${M.lines} lines). ${M.rhyme} ${M.meter}`:`${M.bars} bars (${M.seconds} secs, instrumental)`)+(M.description?` - ${M.description}`:"")].join(`
 `)).join(`
 
-`)}const lm=()=>Rh(()=>import("./mcp-B5xHBKEw.js"),[]),eu=(v,S)=>{try{const T=localStorage.getItem(v);return T===null?S:JSON.parse(T)}catch{return S}},lu=(v,S)=>{try{localStorage.setItem(v,JSON.stringify(S))}catch{}},Vy=v=>{if(!v)return"";const S=[];return v.trackAnalysis&&S.push(`AUDIO ANALYSIS OF THE REFERENCE TRACK:
+`)}const lm=()=>Rh(()=>import("./mcp-Cgbj1-rl.js"),[]),eu=(v,S)=>{try{const T=localStorage.getItem(v);return T===null?S:JSON.parse(T)}catch{return S}},lu=(v,S)=>{try{localStorage.setItem(v,JSON.stringify(S))}catch{}},Vy=v=>{if(!v)return"";const S=[];return v.trackAnalysis&&S.push(`AUDIO ANALYSIS OF THE REFERENCE TRACK:
 ${v.trackAnalysis}`),v.similarTracks&&S.push(`SONICALLY SIMILAR TRACKS:
 ${v.similarTracks}`),v.similarArtists&&S.push(`SONICALLY SIMILAR ARTISTS:
 ${v.similarArtists}`),S.length?`
