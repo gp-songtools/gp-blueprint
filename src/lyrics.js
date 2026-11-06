@@ -94,13 +94,36 @@ export function meterCheck(sections, lyrics) {
 
 export const formatDuration = (secs) => `${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}`;
 
-/** The structure as plain text, for copying. */
+// One value per lyric line. A shorter syllable pattern repeats as-is; each repeat
+// of a shorter rhyme pattern gets fresh letters (ABAB over 8 lines -> ABABCDCD).
+const fitMeter = (meter, n) => {
+  const p = String(meter || '').split('.').filter((x) => /^\d+$/.test(x));
+  return p.length && n > 0 ? Array.from({ length: n }, (_, i) => p[i % p.length]).join('.') : '';
+};
+const fitRhyme = (rhyme, n) => {
+  const p = String(rhyme || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (!p.length || !(n > 0)) return '';
+  const span = Math.max(...[...p].map((c) => c.charCodeAt(0) - 65)) + 1;
+  return Array.from({ length: n }, (_, i) => {
+    const idx = p.charCodeAt(i % p.length) - 65 + Math.floor(i / p.length) * span;
+    return String.fromCharCode(65 + (idx % 26));
+  }).join('');
+};
+
+/**
+ * The structure as plain text, for copying. Lyricpad parses this format
+ * (docs/structure-format.md); keep the two in step.
+ */
 export function formatStructure({ bpm, key, sections = [] }) {
   const head = [bpm && `${bpm} BPM`, key].filter(Boolean).join(', ');
-  return (head ? `${head}\n\n` : '') + sections.map((s) => [
-    sectionHeader(s),
-    (s.lines > 0
-      ? `${s.bars} bars (${s.seconds} secs / ${s.lines} lines). ${s.rhyme} ${s.meter}`
-      : `${s.bars} bars (${s.seconds} secs, instrumental)`) + (s.description ? ` - ${s.description}` : ''),
-  ].join('\n')).join('\n\n');
+  return (head ? `${head}\n\n` : '') + sections.map((s) => {
+    const rhyme = fitRhyme(s.rhyme, s.lines);
+    const meter = fitMeter(s.meter, s.lines);
+    return [
+      sectionHeader(s),
+      (s.lines > 0
+        ? `${s.bars} bars, ${s.seconds} secs, ${s.lines} lines.${rhyme ? ` Rhyme: ${rhyme}.` : ''}${meter ? ` Syllables: ${meter}.` : ''}`
+        : `${s.bars} bars, ${s.seconds} secs, instrumental.`) + (s.description ? ` ${s.description}` : ''),
+    ].join('\n');
+  }).join('\n\n');
 }
