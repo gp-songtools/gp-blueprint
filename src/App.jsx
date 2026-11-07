@@ -17,6 +17,22 @@ const writePref = (key, value) => {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
 };
 
+// One plain line saying where the tempo, key and length shown in the result came from.
+const originText = (v, hasLength) => {
+  const atlas = 'measured by MusicAtlas from the audio';
+  const tempo = v.bpm && (v.measured?.bpm ? atlas : v.origin?.gemini);
+  const key = v.key && (v.measured?.key ? atlas : v.origin?.gemini);
+  const parts = [];
+  if (tempo && tempo === key) parts.push(`Tempo and key: ${tempo}.`);
+  else {
+    if (tempo) parts.push(`Tempo: ${tempo}.`);
+    if (key) parts.push(`Key: ${key}.`);
+  }
+  if ((v.bpm && !v.measured?.bpm) || (v.key && !v.measured?.key)) parts.push(v.origin?.why || '');
+  if (hasLength) parts.push("Length: Gemini's bars for each section at this tempo.");
+  return parts.filter(Boolean).join(' ');
+};
+
 // Turn MCP tool output into a reference block for the Gemini prompt.
 const buildReferenceBlock = (ctx) => {
   if (!ctx) return '';
@@ -196,6 +212,15 @@ export default function App() {
       : song.trim() ? "Gemini's estimate from its knowledge of the song. Paste the lyrics for exact counts."
       : 'Typical structure for this artist (no song given)';
     let measured = {};
+    // Where tempo/key come from when MusicAtlas didn't measure them (shown under the tiles).
+    const origin = {
+      gemini: youtubeUrl ? "Gemini's estimate from listening to the YouTube link"
+        : song.trim() ? "Gemini's estimate from what it knows about the song"
+        : "Gemini's guess for this artist's typical sound",
+      why: !useMcp ? 'MusicAtlas is turned off, so nothing was measured.'
+        : !song.trim() ? 'Add a song title to get MusicAtlas measurements.'
+        : 'MusicAtlas had no measurement for this song.',
+    };
     // Parsed text + the app's own counts + MusicAtlas's measured tempo/key.
     const compose = (text, final) => {
       const p = parseSunoText(text, final);
@@ -204,7 +229,7 @@ export default function App() {
       return {
         ...p, sections, style: style.text, styleTrimmed: style.trimmed,
         bpm: measured.bpm || p.bpm, key: measured.key || p.key,
-        measured: { bpm: !!measured.bpm, key: !!measured.key },
+        measured: { bpm: !!measured.bpm, key: !!measured.key }, origin,
         source, streaming: !final, check: final ? meterCheck(sections, p.lyrics) : '',
       };
     };
@@ -672,17 +697,20 @@ export default function App() {
                   </div>
                   <div className="flex flex-wrap gap-2 mb-4">
                     {[
-                      [view.bpm, view.measured?.bpm ? 'BPM · measured' : 'BPM'],
-                      [view.key, view.measured?.key ? 'Key · measured' : 'Key'],
-                      [total ? formatDuration(total) : '', 'Length'],
+                      [view.bpm, view.measured?.bpm ? 'BPM · MusicAtlas' : 'BPM · Gemini'],
+                      [view.key, view.measured?.key ? 'Key · MusicAtlas' : 'Key · Gemini'],
+                      [total ? formatDuration(total) : '', 'Length · Gemini'],
                       [view.sections.length ? String(view.sections.length) : '', 'Sections'],
                     ].filter(([v]) => v).map(([v, label]) => (
                       <div key={label} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 min-w-[92px] flex flex-col">
                         <span className="font-mono text-base text-slate-100">{v}</span>
-                        <span className={`text-[10px] uppercase tracking-wider ${label.includes('measured') ? 'text-emerald-400' : 'text-slate-500'}`}>{label}</span>
+                        <span className={`text-[10px] uppercase tracking-wider ${label.includes('MusicAtlas') ? 'text-emerald-400' : 'text-slate-500'}`}>{label}</span>
                       </div>
                     ))}
                   </div>
+                  {(view.bpm || view.key || total > 0) && (
+                    <p className="text-xs text-slate-500 -mt-2 mb-4">{originText(view, total > 0)}</p>
+                  )}
                   {total > 0 && (
                     <>
                       <div className="flex h-7 rounded-md overflow-hidden border border-slate-800" aria-hidden="true">
