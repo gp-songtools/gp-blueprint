@@ -55,13 +55,11 @@ vite.config.js        → react() + tailwindcss(); base '/suno-style-creator/' (
 - UI copy: plain, specific, user-facing ("Gemini is overloaded (HTTP 503)..."); no internal jargon.
 - Never commit API keys; the user pastes their Gemini key at runtime. It is stored only if they opt in with "Remember key on this device" (off by default; plain localStorage, shared with every page on gp-songtools.github.io).
 
-## Git & PR workflow
-- Never push to `main` or `gh-pages` directly; `main` deploys automatically on merge.
-- One branch per change from latest `origin/main`; names use dashes (`style-prompt-1000`). A branch named `feature` exists, so `feature/...` names are rejected.
-- Open PRs with REST: `gh api repos/gp-songtools/suno-style-creator/pulls -f title=... -f head=<branch> -f base=main -F body=@file` (`gh pr create` uses GraphQL, which is blocked in cloud sessions).
-- Don't merge PRs yourself; the owner merges. Check merge state via `gh api .../pulls/<n> --jq .merged`.
-- Clone is shallow: before pushing a new branch run `git fetch origin main`.
-- If a PR was already merged, start follow-up work on a fresh branch from `origin/main`; never add commits to a merged branch.
+## Git workflow
+- Commit and push straight to `main` (owner's standing permission, 2026-11-07); no PRs unless the owner asks. Never push to `gh-pages`.
+- Each push to `main` deploys: only push after lint + build (+ Playwright for UI) pass.
+- Clone is shallow: `git fetch origin main` and rebase onto it before pushing.
+- After pushing, watch the "Deploy Suno Style Creator to GitHub Pages" run for that commit and report whether it succeeded (on failure, read the job log and fix).
 - GitHub Pages source must stay `gh-pages` / root (Settings → Pages); serving `main` gives a blank page (`/src/main.jsx` 404).
 - Deploy keeps old hashed assets on `gh-pages` (`clean: false` in deploy.yml) so tabs opened before a deploy can still lazy-load `mcp-*.js`; don't remove it.
 
