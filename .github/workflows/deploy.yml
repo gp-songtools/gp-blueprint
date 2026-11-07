@@ -26,3 +26,6 @@ jobs:
         with:
           folder: dist # Change to 'build' if you are using Create React App instead of Vite
           branch: gh-pages # The branch the action will deploy to
+          # Keep earlier builds' hashed assets: a tab opened before a deploy still
+          # lazy-loads its own chunks (e.g. assets/mcp-*.js) when Generate is pressed.
+          clean: false

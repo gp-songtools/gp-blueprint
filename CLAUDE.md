@@ -63,6 +63,7 @@ vite.config.js        → react() + tailwindcss(); base '/suno-style-creator/' (
 - Clone is shallow: before pushing a new branch run `git fetch origin main`.
 - If a PR was already merged, start follow-up work on a fresh branch from `origin/main`; never add commits to a merged branch.
 - GitHub Pages source must stay `gh-pages` / root (Settings → Pages); serving `main` gives a blank page (`/src/main.jsx` 404).
+- Deploy keeps old hashed assets on `gh-pages` (`clean: false` in deploy.yml) so tabs opened before a deploy can still lazy-load `mcp-*.js`; don't remove it.
 
 ## Related (not in this repo)
 - "Suno Prompt Studio" is a separate claude.ai artifact (Claude + MusicAtlas connector, no API key). Changes to it are not made here.
