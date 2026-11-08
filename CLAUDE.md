@@ -52,6 +52,7 @@ vite.config.js        → react() + tailwindcss(); base '/suno-style-creator/' (
 - localStorage keys: `gemini.model`, `gemini.rememberKey`, `gemini.key` (only while rememberKey is on; removed when it's off), `mcp.enabled`, `mcp.url`. Always wrap access in try/catch (readPref/writePref helpers). A saved `DIRECT_MUSICATLAS_URL` is migrated to the proxy on load.
 - Styling: Tailwind utility classes inline in JSX, dark slate palette, lucide-react icons. No CSS modules.
 - Naming: camelCase JS modules in `src/`, PascalCase only for components. Constants UPPER_SNAKE.
+- `CHANGELOG.md`: add an entry in the same commit as every user-facing change: today's date heading, newest first (reuse it if it's already at the top), items under Added / Changed / Fixed, plain user wording.
 - UI copy: plain, specific, user-facing ("Gemini is overloaded (HTTP 503)..."); no internal jargon.
 - Never commit API keys; the user pastes their Gemini key at runtime. It is stored only if they opt in with "Remember key on this device" (off by default; plain localStorage, shared with every page on gp-songtools.github.io).
 
