@@ -2,6 +2,12 @@
 
 All notable changes to Suno Style Creator, newest first. The app has no version numbers, so entries are grouped by date.
 
+## 2026-11-08 — Changelog page
+
+### Added
+
+- A **Changelog page** (`changelog.html`) that shows this changelog in a readable layout, with the newest changes first.
+
 ## 2026-11-07 — Measurement sources
 
 ### Added

@@ -26,7 +26,8 @@ src/App.jsx           → ALL UI + state (useState/useEffect only; no router, no
   └─ src/mcpConfig.js → DEFAULT_MCP_URL, DIRECT_MUSICATLAS_URL (no imports)
 src/index.css         → `@import "tailwindcss"` + base bg
 mcp-proxy/worker.js   → Cloudflare Worker CORS proxy for MusicAtlas (separate deploy)
-vite.config.js        → react() + tailwindcss(); base '/suno-style-creator/' (must match repo name)
+vite.config.js        → react() + tailwindcss() + copy-changelog (ships CHANGELOG.md in dist/); base '/suno-style-creator/' (must match repo name)
+public/changelog.html → static page that fetches and renders CHANGELOG.md; edit only the .md
 .github/workflows/deploy.yml → push to main: npm ci + build → gh-pages branch
 ```
 - Dependency direction: App → gemini, lyrics, mcp, mcpConfig; mcp → mcpConfig. gemini.js, lyrics.js and mcp.js never import React or App.
