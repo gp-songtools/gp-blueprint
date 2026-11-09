@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Suno Style Creator, newest first. The app has no version numbers, so entries are grouped by date.
+All notable changes to GP Blueprint (formerly Suno Style Creator), newest first. The app has no version numbers, so entries are grouped by date.
 
 ## 2026-11-09 — Visit statistics and credits
 
@@ -10,6 +10,7 @@ All notable changes to Suno Style Creator, newest first. The app has no version 
 
 ### Changed
 
+- **Renamed to GP Blueprint** (formerly Suno Style Creator, shown in the app as SunoPrompt AI), to match the other GP Song Tools. The address and everything else stay the same.
 - The app now counts visits with Cloudflare Web Analytics: anonymous totals only, with no cookies. It never sees what you type or your key. The Privacy & credits page explains what it reports.
 
 ## 2026-11-08 — Changelog page
