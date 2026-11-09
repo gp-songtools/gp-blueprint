@@ -2,6 +2,16 @@
 
 All notable changes to Suno Style Creator, newest first. The app has no version numbers, so entries are grouped by date.
 
+## 2026-11-09 — Visit statistics and credits
+
+### Added
+
+- **Changelog** and **Privacy & credits** links at the bottom of the page.
+
+### Changed
+
+- The app now counts visits with Cloudflare Web Analytics: anonymous totals only, with no cookies. It never sees what you type or your key. The Privacy & credits page explains what it reports.
+
 ## 2026-11-08 — Changelog page
 
 ### Added

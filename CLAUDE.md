@@ -54,6 +54,7 @@ public/changelog.html → static page that fetches and renders CHANGELOG.md; edi
 - Styling: Tailwind utility classes inline in JSX, dark slate palette, lucide-react icons. No CSS modules.
 - Naming: camelCase JS modules in `src/`, PascalCase only for components. Constants UPPER_SNAKE.
 - `CHANGELOG.md`: add an entry in the same commit as every user-facing change: today's date heading, newest first (reuse it if it's already at the top), items under Added / Changed / Fixed, plain user wording.
+- Cloudflare Web Analytics snippet sits before `</body>` in `index.html` and `public/changelog.html` (same token on all GP Song Tools); add it to any new page. Privacy & credits live on the suite page `gp-songtools.github.io/toolsmenu/privacy.html` (repo `gp-songtools/toolsmenu`), linked from the App footer; update it when changing what is sent, stored, or which libraries/services are used.
 - UI copy: plain, specific, user-facing ("Gemini is overloaded (HTTP 503)..."); no internal jargon.
 - Never commit API keys; the user pastes their Gemini key at runtime. It is stored only if they opt in with "Remember key on this device" (off by default; plain localStorage, shared with every page on gp-songtools.github.io).
 

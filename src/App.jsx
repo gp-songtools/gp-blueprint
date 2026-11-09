@@ -838,6 +838,11 @@ export default function App() {
           </div>
         </div>
       </main>
+      <footer className="max-w-7xl mx-auto px-4 pb-8 text-xs text-slate-500">
+        <a href="changelog.html" className="hover:text-slate-300 underline">Changelog</a>
+        {' · '}
+        <a href="https://gp-songtools.github.io/toolsmenu/privacy.html" className="hover:text-slate-300 underline">Privacy &amp; credits</a>
+      </footer>
     </div>
   );
 }

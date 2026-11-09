@@ -31,6 +31,10 @@ Deploy the small proxy in `mcp-proxy/` (a Cloudflare Worker). Then set the app's
 cd mcp-proxy && npx wrangler deploy
 ```
 
+## Privacy & credits
+
+No server or account of its own: your key goes only to Google, and MusicAtlas requests pass through the stateless proxy in `mcp-proxy/`. Pages load Cloudflare Web Analytics, shared by all GP Song Tools, for anonymous visit counts (no cookies; it never sees your inputs or key). Built with React, Tailwind CSS, Lucide icons and the Model Context Protocol SDK; audio analysis by MusicAtlas. Details: [Privacy & credits](https://gp-songtools.github.io/toolsmenu/privacy.html).
+
 ## Dev
 
 ```bash
