@@ -32,7 +32,7 @@ public/changelog.html → static page that fetches and renders CHANGELOG.md; edi
 ```
 - Dependency direction: App → gemini, lyrics, mcp, mcpConfig; mcp → mcpConfig. gemini.js, lyrics.js and mcp.js never import React or App.
 - Keep `mcp.js` behind `import()` (it pulls in the ~390 KB MCP SDK); mcpConfig.js stays separate so App can read the URL without loading the SDK.
-- `src/assets/react.svg` is unused template leftover; `public/vite.svg` is the favicon.
+- `src/assets/react.svg` is unused template leftover; the favicon is the 🎨 emoji as an inline SVG `<link rel="icon">` in `index.html` and `public/changelog.html` (matches the GP Song Tools menu card).
 
 ## Request flow (App.generatePrompt)
 1. Validate artist + Gemini key.
