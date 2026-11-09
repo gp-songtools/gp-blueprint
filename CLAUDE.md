@@ -1,14 +1,14 @@
 # CLAUDE.md
 
 GP Blueprint (formerly Suno Style Creator / SunoPrompt AI): Suno prompt generator: artist/song/topic/lyrics/YouTube Music link → style prompt, stem prompts, section structure, lyrics.
-React 19 + Vite 7, plain JavaScript (no TypeScript, no test suite). Gemini REST API + MusicAtlas MCP. Deployed to GitHub Pages at https://gp-songtools.github.io/suno-style-creator/ (repo `gp-songtools/suno-style-creator`; moved from `pcarenza`).
+React 19 + Vite 7, plain JavaScript (no TypeScript, no test suite). Gemini REST API + MusicAtlas MCP. Deployed to GitHub Pages at https://gp-songtools.github.io/gp-blueprint/ (repo `gp-songtools/gp-blueprint`; renamed from `suno-style-creator` on 2026-11-09, moved from `pcarenza` before that).
 
 ## Commands (run from repo root; keep output quiet)
 - Install: `npm ci --silent --no-audit --no-fund`
 - Lint (the only static check; no type checker exists): `npx eslint . --quiet`
 - Lint one file: `npx eslint src/gemini.js --quiet`
 - Build: `npx vite build --logLevel warn` (output `dist/`, gitignored; delete after checking)
-- Dev / preview: `npm run dev` / `npx vite preview --port 4173` → `http://localhost:4173/suno-style-creator/`
+- Dev / preview: `npm run dev` / `npx vite preview --port 4173` → `http://localhost:4173/gp-blueprint/`
 - Smoke-test a pure function (no test runner):
   `node -e "import('./src/gemini.js').then(m=>console.log(m.pickDefaultModel(['gemini-3.6-flash'])))"`
 - UI check: Playwright + Chromium are preinstalled (`require('playwright')`); stub `generativelanguage.googleapis.com` with `page.route`
@@ -26,7 +26,7 @@ src/App.jsx           → ALL UI + state (useState/useEffect only; no router, no
   └─ src/mcpConfig.js → DEFAULT_MCP_URL, DIRECT_MUSICATLAS_URL (no imports)
 src/index.css         → `@import "tailwindcss"` + base bg
 mcp-proxy/worker.js   → Cloudflare Worker CORS proxy for MusicAtlas (separate deploy)
-vite.config.js        → react() + tailwindcss() + copy-changelog (ships CHANGELOG.md in dist/); base '/suno-style-creator/' (must match repo name)
+vite.config.js        → react() + tailwindcss() + copy-changelog (ships CHANGELOG.md in dist/); base '/gp-blueprint/' (must match repo name)
 public/changelog.html → static page that fetches and renders CHANGELOG.md; edit only the .md
 .github/workflows/deploy.yml → push to main: npm ci + build → gh-pages branch
 ```
@@ -55,7 +55,7 @@ public/changelog.html → static page that fetches and renders CHANGELOG.md; edi
 - Naming: camelCase JS modules in `src/`, PascalCase only for components. Constants UPPER_SNAKE.
 - `CHANGELOG.md`: add an entry in the same commit as every user-facing change: today's date heading, newest first (reuse it if it's already at the top), items under Added / Changed / Fixed, plain user wording.
 - Cloudflare Web Analytics snippet sits before `</body>` in `index.html` and `public/changelog.html` (same token on all GP Song Tools); add it to any new page. Privacy & credits live on the suite page `gp-songtools.github.io/toolsmenu/privacy.html` (repo `gp-songtools/toolsmenu`), linked from the App footer; update it when changing what is sent, stored, or which libraries/services are used.
-- Product name is **GP Blueprint** (trademark reasons): never put "Suno" in the product name, page title, header or logo. Describing compatibility ("Suno-ready", "for Suno") is fine. Repo, URL path and internal identifiers (`generateSunoPrompt`, package name) keep `suno` until a planned rename.
+- Product name is **GP Blueprint** (trademark reasons): never put "Suno" in the product name, page title, header or logo. Describing compatibility ("Suno-ready", "for Suno") is fine. Internal identifiers (`generateSunoPrompt`, package name, `suno-mcp-proxy` worker) keep `suno`; users never see them. The old address `/suno-style-creator/` is gone (GitHub Pages does not redirect renamed repos).
 - UI copy: plain, specific, user-facing ("Gemini is overloaded (HTTP 503)..."); no internal jargon.
 - Never commit API keys; the user pastes their Gemini key at runtime. It is stored only if they opt in with "Remember key on this device" (off by default; plain localStorage, shared with every page on gp-songtools.github.io).
 

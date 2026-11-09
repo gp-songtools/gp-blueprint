@@ -123,7 +123,7 @@ li li{display:list-item;list-style:disc;margin:0 0 4px 18px}
     .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
     .then(render)
     .catch(e => {
-      log.innerHTML = '<p class="msg">The changelog couldn’t be loaded ({ERR}). <a href="https://github.com/gp-songtools/suno-style-creator/blob/main/CHANGELOG.md">View it on GitHub</a>.</p>'.replace("{ERR}", esc(String(e.message || e)));
+      log.innerHTML = '<p class="msg">The changelog couldn’t be loaded ({ERR}). <a href="https://github.com/gp-songtools/gp-blueprint/blob/main/CHANGELOG.md">View it on GitHub</a>.</p>'.replace("{ERR}", esc(String(e.message || e)));
     });
 })();
 </script>

@@ -14,5 +14,5 @@ const changelog = {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), changelog],
-  base: '/suno-style-creator/', // must match your repo name
+  base: '/gp-blueprint/', // must match your repo name
 })

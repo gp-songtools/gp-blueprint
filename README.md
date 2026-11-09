@@ -1,6 +1,6 @@
 # GP Blueprint
 
-Formerly Suno Style Creator / SunoPrompt AI. Part of the [GP Song Tools](https://gp-songtools.github.io/toolsmenu/).
+Formerly Suno Style Creator / SunoPrompt AI. Live at https://gp-songtools.github.io/gp-blueprint/. Part of the [GP Song Tools](https://gp-songtools.github.io/toolsmenu/).
 
 Generates Suno.ai style tags, song structure, rhyme scheme and Suno-ready lyrics from an artist, an optional song, and an optional topic.
 

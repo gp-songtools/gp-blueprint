@@ -20,7 +20,7 @@ function withTimeout(promise, ms, label) {
 }
 
 export async function connectMcp(url) {
-  const client = new Client({ name: 'suno-style-creator', version: '1.0.0' });
+  const client = new Client({ name: 'gp-blueprint', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(new URL(url));
   try {
     await withTimeout(client.connect(transport), 20000, 'MCP connect');
