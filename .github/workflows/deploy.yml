@@ -1,4 +1,4 @@
-name: Deploy Suno Style Creator to GitHub Pages
+name: Deploy GP Blueprint to GitHub Pages
 
 on:
   push:

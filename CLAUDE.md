@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Suno prompt generator: artist/song/topic/lyrics/YouTube Music link → style prompt, stem prompts, section structure, lyrics.
+GP Blueprint (formerly Suno Style Creator / SunoPrompt AI): Suno prompt generator: artist/song/topic/lyrics/YouTube Music link → style prompt, stem prompts, section structure, lyrics.
 React 19 + Vite 7, plain JavaScript (no TypeScript, no test suite). Gemini REST API + MusicAtlas MCP. Deployed to GitHub Pages at https://gp-songtools.github.io/suno-style-creator/ (repo `gp-songtools/suno-style-creator`; moved from `pcarenza`).
 
 ## Commands (run from repo root; keep output quiet)
@@ -55,6 +55,7 @@ public/changelog.html → static page that fetches and renders CHANGELOG.md; edi
 - Naming: camelCase JS modules in `src/`, PascalCase only for components. Constants UPPER_SNAKE.
 - `CHANGELOG.md`: add an entry in the same commit as every user-facing change: today's date heading, newest first (reuse it if it's already at the top), items under Added / Changed / Fixed, plain user wording.
 - Cloudflare Web Analytics snippet sits before `</body>` in `index.html` and `public/changelog.html` (same token on all GP Song Tools); add it to any new page. Privacy & credits live on the suite page `gp-songtools.github.io/toolsmenu/privacy.html` (repo `gp-songtools/toolsmenu`), linked from the App footer; update it when changing what is sent, stored, or which libraries/services are used.
+- Product name is **GP Blueprint** (trademark reasons): never put "Suno" in the product name, page title, header or logo. Describing compatibility ("Suno-ready", "for Suno") is fine. Repo, URL path and internal identifiers (`generateSunoPrompt`, package name) keep `suno` until a planned rename.
 - UI copy: plain, specific, user-facing ("Gemini is overloaded (HTTP 503)..."); no internal jargon.
 - Never commit API keys; the user pastes their Gemini key at runtime. It is stored only if they opt in with "Remember key on this device" (off by default; plain localStorage, shared with every page on gp-songtools.github.io).
 
@@ -62,7 +63,7 @@ public/changelog.html → static page that fetches and renders CHANGELOG.md; edi
 - Commit and push straight to `main` (owner's standing permission, 2026-11-07); no PRs unless the owner asks. Never push to `gh-pages`.
 - Each push to `main` deploys: only push after lint + build (+ Playwright for UI) pass.
 - Clone is shallow: `git fetch origin main` and rebase onto it before pushing.
-- After pushing, watch the "Deploy Suno Style Creator to GitHub Pages" run for that commit and report whether it succeeded (on failure, read the job log and fix).
+- After pushing, watch the "Deploy GP Blueprint to GitHub Pages" run for that commit and report whether it succeeded (on failure, read the job log and fix).
 - GitHub Pages source must stay `gh-pages` / root (Settings → Pages); serving `main` gives a blank page (`/src/main.jsx` 404).
 - Deploy keeps old hashed assets on `gh-pages` (`clean: false` in deploy.yml) so tabs opened before a deploy can still lazy-load `mcp-*.js`; don't remove it.
 

@@ -359,7 +359,7 @@ export default function App() {
               <Music className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400">
-              SunoPrompt AI
+              GP Blueprint
             </h1>
           </div>
           <span className="text-xs font-medium px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">
