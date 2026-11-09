@@ -10,7 +10,8 @@ All notable changes to GP Blueprint (formerly Suno Style Creator), newest first.
 
 ### Changed
 
-- **Renamed to GP Blueprint** (formerly Suno Style Creator, shown in the app as SunoPrompt AI), to match the other GP Song Tools. The address and everything else stay the same.
+- **Renamed to GP Blueprint** (formerly Suno Style Creator, shown in the app as SunoPrompt AI), to match the other GP Song Tools.
+- **New address:** https://gp-songtools.github.io/gp-blueprint/ (was `/suno-style-creator/`). Update any bookmarks. Your saved key (if remembered), model and MusicAtlas settings carry over.
 - The app now counts visits with Cloudflare Web Analytics: anonymous totals only, with no cookies. It never sees what you type or your key. The Privacy & credits page explains what it reports.
 
 ## 2026-11-08 — Changelog page
