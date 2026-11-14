@@ -55,21 +55,21 @@ export function applyCounts(sections, blocks) {
   });
 }
 
-/** One Suno header per section: [NAME: style hints], built from the section's tag. */
+/** One Suno header per section: [NAME|hint|hint...] (at most 7 elements), built from the section's tag. */
 export function sectionHeader(s) {
   const tag = (s.tags || '').trim().replace(/^\[|\]$/g, '').trim();
   const sname = (s.name || '').trim();
   let hints = tag;
   let found = sname;
   if (sname && tag.toLowerCase().startsWith(sname.toLowerCase())) {
-    hints = tag.slice(sname.length).replace(/^\s*(?::|[-–—])\s*/, ''); // "[Pre-Chorus - x]" or "[Pre-Chorus: x]"
+    hints = tag.slice(sname.length).replace(/^\s*(?::|\||[-–—])\s*/, ''); // "[Pre-Chorus|x]", "[Pre-Chorus - x]" or "[Pre-Chorus: x]"
   } else {
-    const m = /^([^:]{1,40}?)\s*(?::|\s[-–—]\s)\s*(.+)$/.exec(tag); // a differently worded name
+    const m = /^([^:|]{1,40}?)\s*(?::|\||\s[-–—]\s)\s*(.+)$/.exec(tag); // a differently worded name
     if (m) { hints = m[2]; found = sname || m[1]; }
   }
-  hints = hints.trim();
+  const parts = hints.split(/\s*[|,;]\s*/).map((h) => h.trim()).filter(Boolean).slice(0, 6); // name + 6 = 7 max
   const name = (found || 'Section').toUpperCase();
-  return hints ? `[${name}: ${hints}]` : `[${name}]`;
+  return `[${[name, ...parts].join('|')}]`;
 }
 
 /** How well the generated lyrics follow the target meter. */

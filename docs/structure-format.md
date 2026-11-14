@@ -9,13 +9,13 @@ If you change the format, change Lyricpad's parser too.
 ```
 89 BPM, Ab minor
 
-[INTRO: fuzz guitar]
+[INTRO|driving|fuzz guitar]
 4 bars, 11 secs, instrumental. Driving drums and fuzz guitar.
 
-[VERSE 1: half-spoken, tense]
+[VERSE 1|tense|half-spoken vocals]
 16 bars, 43 secs, 8 lines. Rhyme: ABABCDCD. Syllables: 8.7.8.7.8.7.8.7. Restless, half-spoken.
 
-[CHORUS: shouted gang vocals]
+[CHORUS|explosive|shouted gang vocals]
 8 bars, 22 secs, 4 lines. Rhyme: AABB. Syllables: 6.6.8.8. Big shouted hook.
 ```
 
@@ -23,7 +23,7 @@ If you change the format, change Lyricpad's parser too.
 
 - **First line (optional):** `<bpm> BPM, <key>`, either part may be missing; followed by a blank line. Absent when neither is known.
 - **Sections** are separated by one blank line. Each section is exactly two lines:
-  1. **Header**: the Suno section tag, `[NAME]` or `[NAME: style hints]`. The name is upper case. Paste it into the lyrics as-is.
+  1. **Header**: the Suno section tag, `[NAME]` or `[NAME|hint|hint...]`: the name, then up to 6 style hints, all separated by `|` (7 elements at most). Hint order: mood/energy, vocal style, key instruments, dynamic/movement, spatial/effects, production style; slots that don't apply are left out. The name is upper case and never contains `|`. Paste it into the lyrics as-is. (Before 2026-11-14 the header was `[NAME: hint, hint]`; a parser should accept both: name = text before the first `|` or `:`.)
   2. **Details**:
      - Sung: `<bars> bars, <secs> secs, <n> lines. Rhyme: <letters>. Syllables: <n1>.<n2>.... <description>`
      - Instrumental: `<bars> bars, <secs> secs, instrumental. <description>`
