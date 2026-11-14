@@ -2,6 +2,12 @@
 
 All notable changes to GP Blueprint (formerly Suno Style Creator), newest first. The app has no version numbers, so entries are grouped by date.
 
+## 2026-11-14 — Pipe-separated section tags
+
+### Changed
+
+- **Section tags in the song structure and lyrics now use pipes**, like `[CHORUS|euphoric|soaring vocals|full band|explosive lift|wide reverb|polished mix]`. Elements follow Suno's weighting, most important first: mood/energy, vocal style, key instruments, dynamics, space/effects, production. Each tag has at most 7 elements, never mixes contradictory ones, and always fits the style prompt.
+
 ## 2026-11-09 — Visit statistics and credits
 
 ### Added
