@@ -339,6 +339,7 @@ export default function App() {
 
   const view = result || (showExample ? EXAMPLE : null);
   const total = view ? view.sections.reduce((a, sec) => a + (Number(sec.seconds) || 0), 0) : 0;
+  const styleMax = view?.target === 'mozart' ? HANS_PROMPT_MAX : STYLE_PROMPT_MAX;
   const elapsed = Math.max(0, Math.round((now - startedAt) / 1000));
   const liveStatus = mcpStage === 'mcp' ? `Asking MusicAtlas: ${mcpStep}...`
     : `${model || 'Gemini'} is ${writing ? 'writing' : youtube.trim() ? 'listening' : 'thinking'}... ${elapsed}s`;
@@ -403,7 +404,7 @@ export default function App() {
                   </div>
                   <p className="text-xs text-slate-500">
                     {target === 'mozart'
-                      ? "Detailed prompt for Mozart's ElevenLabs model, a short one for Hans, stems, structure and lyrics."
+                      ? "A short Hans 2.0 prompt with BPM and key, plus structure and lyrics for Mozart."
                       : 'Style prompt, stems, tagged structure and lyrics for Suno.'}
                   </p>
                 </div>
@@ -650,7 +651,7 @@ export default function App() {
                 <div className="bg-slate-900 rounded-2xl border border-purple-500/30 overflow-hidden shadow-2xl shadow-purple-900/10">
                   <div className="bg-slate-800/50 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
                     <h3 className="font-semibold text-purple-300 flex items-center gap-2">
-                      <Play className="w-4 h-4 fill-current" /> {view.target === 'mozart' ? 'Mozart Prompt · ElevenLabs model' : 'Suno Style Prompt'}
+                      <Play className="w-4 h-4 fill-current" /> {view.target === 'mozart' ? 'Mozart Prompt · Hans 2.0' : 'Suno Style Prompt'}
                     </h3>
                     {copyButton(view.style, 'tags')}
                   </div>
@@ -666,11 +667,11 @@ export default function App() {
                     {view.style && (
                     <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                       <span className={
-                        view.style.length > STYLE_PROMPT_MAX ? 'text-red-400 font-medium'
-                          : view.style.length > STYLE_PROMPT_MAX * 0.9 ? 'text-amber-300 font-medium'
+                        view.style.length > styleMax ? 'text-red-400 font-medium'
+                          : view.style.length > styleMax * 0.9 ? 'text-amber-300 font-medium'
                           : 'text-emerald-400 font-medium'
                       }>
-                        {view.style.length.toLocaleString()} / {STYLE_PROMPT_MAX.toLocaleString()} chars
+                        {view.style.length.toLocaleString()} / {styleMax.toLocaleString()} chars
                       </span>
                       {view.styleTrimmed && (
                         <>
@@ -680,7 +681,7 @@ export default function App() {
                       )}
                       <span className="w-1 h-1 rounded-full bg-slate-600"></span>
                       <span>{view.target === 'mozart'
-                        ? "Paste into Mozart's prompt box with the ElevenLabs model selected. Tempo and key are honored."
+                        ? "Paste into Mozart's prompt box with Hans 2.0 selected. Hans treats tempo and key as suggestions."
                         : 'Ready for Suno.ai "Style of Music" box'}</span>
                       {modelUsed && (
                         <>
@@ -695,38 +696,12 @@ export default function App() {
                   </div>
                 </div>
 
-                {view.target === 'mozart' && view.hans && (
-                  <div className="bg-slate-900 rounded-2xl border border-purple-500/30 overflow-hidden shadow-2xl shadow-purple-900/10">
-                    <div className="bg-slate-800/50 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
-                      <h3 className="font-semibold text-purple-300 flex items-center gap-2">
-                        <Play className="w-4 h-4 fill-current" /> Mozart Prompt · Hans models
-                      </h3>
-                      {copyButton(view.hans, 'hans')}
-                    </div>
-                    <div className="p-6">
-                      <p className="text-base leading-relaxed text-slate-200 whitespace-pre-wrap">{view.hans}</p>
-                      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                        <span className={
-                          view.hans.length > HANS_PROMPT_MAX ? 'text-red-400 font-medium'
-                            : view.hans.length > HANS_PROMPT_MAX * 0.9 ? 'text-amber-300 font-medium'
-                            : 'text-emerald-400 font-medium'
-                        }>
-                          {view.hans.length.toLocaleString()} / {HANS_PROMPT_MAX.toLocaleString()} chars
-                        </span>
-                        <span className="w-1 h-1 rounded-full bg-slate-600"></span>
-                        <span>Short brief for Hans 2.0 / 1.0. Hans treats tempo and key as suggestions.</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
+                {view.target !== 'mozart' && (
                 <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg">
                   <h4 className="font-medium text-amber-300 uppercase tracking-wider text-xs flex items-center gap-2 mb-1">
                     <Layers className="w-4 h-4" /> Stem Layer Prompts
                   </h4>
-                  <p className="text-xs text-slate-500 mb-4">{view.target === 'mozart'
-                    ? "One prompt per instrument group, for generating single-instrument stems with Mozart's ElevenLabs model."
-                    : 'One prompt per instrument group, each for generating that layer on its own in Suno.'}</p>
+                  <p className="text-xs text-slate-500 mb-4">One prompt per instrument group, each for generating that layer on its own in Suno.</p>
                   {view.stems.length === 0 && waiting(view.streaming ? 'Waiting for stem prompts...' : 'No stem prompts.')}
                   <div className="space-y-3">
                     {view.stems.map((stem, i) => (
@@ -742,6 +717,7 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+                )}
 
                 <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg">
                   <div className="flex justify-between items-start mb-4 gap-3">

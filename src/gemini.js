@@ -115,15 +115,11 @@ export function buildPrompt({ artist, song, topic, lyrics, blocks = [], referenc
 ATTACHED RECORDING: the audio attached to this message is ${song ? `"${song}" by ${artist}` : `a track by ${artist}`}. Listen to it and base the style, stems and structure on what you actually hear: the instruments and how they are played, the vocal timbre and delivery, the groove, how the arrangement builds and drops, and the mix and production. ${reference ? 'Where the MusicAtlas analysis gives a measured tempo or key, use those over your own estimate.' : 'Estimate tempo and key from the audio, and make sure the tempo is not half or double the real one.'}
 ` : '';
   const styleText = mozart
-    ? `This is the prompt for Mozart's ElevenLabs model, a literal, spec-following model. Write complete short sentences or clauses in this order: a specific genre with an era anchor (3 to 4 words of genre beat one label; if a subtle genre is blended with a big mainstream one, reinforce the subtle one with concrete detail); one or two mood words; vocals (gender, number of voices, language, delivery, mic distance, or "no vocals"); the instruments AND how they are played; "<bpm> BPM, <key>"; the production character in real engineering language (tape warmth, close-mic, wide stereo, punchy dynamics...); exclusions (what is NOT in the song, such as "no drums, no synths": the model's strongest lever, so give at least one); the arc in structure words (intro, verse, chorus, bridge, drop, outro), for example "slow build from X to Y"; and the length ("about N minutes", matching the STRUCTURE total, at most 5 minutes). Describe what you would hear, not what you would feel. The whole STYLE section must be 400 to 900 characters and never more than ${STYLE_PROMPT_MAX}.
-Example: "Soft acoustic folk from the 1970s, warm and intimate. Breathy male vocal, close-mic. Fingerpicked acoustic guitar, light tambourine. 92 BPM, C major. Tape warmth, small-room feel. No drums, no electric instruments. About two minutes."`
+    ? `This is the prompt for Mozart's Hans 2.0 model, which reads it like a producer reads a creative brief. Write ONE short, vivid, front-loaded line of at most ${HANS_PROMPT_MAX} characters (longer prompts get condensed, so anything essential goes first), in this order: <precise genre, with an era anchor (e.g. 90s R&B, 80s synthpop)> + <one or two mood words> + <two or three named instruments and how they play> + <vocal description: gender, attitude, delivery, or "no vocals"> + <bpm> BPM, <key> + <a closing image of what the song is about${topic ? ' (use the topic)' : ''}>. Genre first: it is the strongest signal. Name the genre precisely; anchor a niche genre with instruments and an era so it does not drift to the mainstream. Describe what you would hear, not what you would feel.
+Example: "Upbeat funky disco, confident and glamorous, punchy horns and a walking bassline, female lead vocals, 118 BPM, A minor, made for a packed dancefloor"`
     : `One line of comma-separated core style tags: genre and subgenre, era, tempo in BPM, key, vocal type, mood.
 Then a few complete sentences that follow this order, each element supporting the same musical vision rather than competing: <genre> with <subgenre> influences, <mood> atmosphere, <main instruments> supported by <additional instruments> (say how they are played), <vocal style or instrumental>, <arrangement: how the song develops, e.g. intimate intro, building verses, powerful chorus, outro>, <production: e.g. warm analog texture, spacious reverb, punchy drums, polished modern production>. Describe the sound, not just the subject; leave out elements that do not apply (e.g. vocals for an instrumental). The whole STYLE section must be 750 to 950 characters and never more than ${STYLE_PROMPT_MAX}.`;
-  const hansText = `One short, vivid, front-loaded line for Mozart's Hans models, at most ${HANS_PROMPT_MAX} characters, in this order: <precise genre (+ era)> + <one or two mood words> + <two or three named instruments and how they play> + <vocal description, or "no vocals"> + <bpm> BPM, <key> + <a closing image of what the song is about${topic ? ' (use the topic)' : ''}>. Genre first.
-Example: "Upbeat funky disco, confident and glamorous, punchy horns and a walking bassline, female lead vocals, 118 BPM, A minor, made for a packed dancefloor"`;
-  const stemsText = mozart
-    ? 'Each prompt is an ElevenLabs single-instrument spec of 200 to 350 characters: it starts "Solo <instrument(s)>", then says how it is played, the tone, "<bpm> BPM, <key>", the production character, "loopable", and exclusions such as "no other instruments, no vocals". For the Vocals group use "a cappella ..." instead of "Solo ...".'
-    : 'Each prompt is 200 to 350 characters of complete sentences describing ONLY that group in isolation, as if generating just that stem: specific instruments, playing style, tone, role in the mix, and tempo and key where relevant. Start with "Isolated <group> stem:".';
+  const stemsText = 'Each prompt is 200 to 350 characters of complete sentences describing ONLY that group in isolation, as if generating just that stem: specific instruments, playing style, tone, role in the mix, and tempo and key where relevant. Start with "Isolated <group> stem:".';
   const tagText = mozart
     ? '- section tag: just the section name in upper case in square brackets, such as [CHORUS] or [VERSE 2], with no style hints (Mozart builds the arrangement from section names; style goes in STYLE).'
     : `- suno tag: the Suno section header in square brackets: the section name in upper case, then style elements, ALL separated by the pipe symbol | (never commas, colons or other punctuation between elements). Suno gives more weight to earlier elements, so always use this order and leave out any slot that does not apply (e.g. no vocal style in an instrumental section): [SECTION|mood/energy|vocal style|key instruments|dynamic/movement|spatial/effects|production style], such as [CHORUS|euphoric|soaring belted vocals|full band and stacked synths|explosive lift|wide stereo reverb|polished arena mix]. Never more than 7 elements in total, counting the section name. Never put contradictory elements in the same tag (e.g. whispered and belted, sparse and wall of sound). Never use an element that fights the STYLE section: it must fit its genre, instruments, vocal type, mood and production.`;
@@ -135,14 +131,14 @@ Reply in EXACTLY this plain-text format, with each marker alone on its own line,
 
 @@STYLE
 ${styleText}
-${mozart ? '@@HANS\n' + hansText + '\n' : ''}@@TEMPO
+@@TEMPO
 bpm: <tempo as a whole number>
 key: <key, e.g. G major>
-@@STEMS
+${mozart ? '' : `@@STEMS
 One line per instrument group actually present, chosen from: Drums & Percussion, Bass, Rhythm Guitar, Lead Guitar, Piano / Keys, Synthesizers, Strings / Orchestral, Brass / Horns, Vocals, Backing Vocals / Choir, Pads & Atmosphere, FX & Transitions.
 Format: <group> || <prompt>
 ${stemsText}
-@@STRUCTURE
+`}@@STRUCTURE
 One line per section, in song order. ${structureRule}
 Format: <section name> || <bars> || <seconds> || <lyric lines> || <rhyme> || <meter> || <description> || <${mozart ? 'section tag' : 'suno tag'}>
 - seconds: the section's length at the song's tempo (in 4/4: bars x 4 x 60 / BPM, rounded).
@@ -165,13 +161,13 @@ ${lyrics.slice(0, 20000)}
 }
 
 /**
- * Parse Gemini's marker-formatted answer (@@STYLE, @@HANS, @@TEMPO, @@STEMS,
+ * Parse Gemini's marker-formatted answer (@@STYLE, @@TEMPO, @@STEMS,
  * @@STRUCTURE, @@LYRICS, @@END). With `final` false the last, still-being-written
  * line of the open part is dropped so half lines never render.
  */
 export function parseSunoText(text, final) {
   const parts = {};
-  const re = /^@@(STYLE|HANS|TEMPO|STEMS|STRUCTURE|LYRICS|END)\s*$/gm;
+  const re = /^@@(STYLE|TEMPO|STEMS|STRUCTURE|LYRICS|END)\s*$/gm;
   let m;
   let last = null;
   let lastIdx = 0;
@@ -209,7 +205,6 @@ export function parseSunoText(text, final) {
     }));
   return {
     style: (parts.STYLE || '').trim(),
-    hans: (parts.HANS || '').trim().split('\n')[0].trim(),
     bpm: tempo.bpm || '',
     key: tempo.key || '',
     stems,

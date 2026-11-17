@@ -42,7 +42,7 @@ public/changelog.html → static page that fetches and renders CHANGELOG.md; edi
 5. Final: `fitStylePrompt(style)` trims to STYLE_PROMPT_MAX at a sentence boundary; `meterCheck` compares lyrics to the target meter.
 
 ## Conventions & guardrails
-- Gemini reply is plain text with markers (no JSON schema, so it can stream): `@@STYLE`, `@@HANS` (Mozart mode only, one line ≤ HANS_PROMPT_MAX), `@@TEMPO` (bpm:/key:), `@@STEMS` (`group || prompt`), `@@STRUCTURE` (`name || bars || seconds || lines-or-#block || rhyme || meter || description || suno tag`), `@@LYRICS`, `@@END`. Changing a field means updating buildPrompt, parseSunoText and App rendering together.
+- Gemini reply is plain text with markers (no JSON schema, so it can stream): `@@STYLE` (in Mozart mode: one Hans 2.0 line ≤ HANS_PROMPT_MAX; no `@@STEMS`), `@@TEMPO` (bpm:/key:), `@@STEMS` (`group || prompt`), `@@STRUCTURE` (`name || bars || seconds || lines-or-#block || rhyme || meter || description || suno tag`), `@@LYRICS`, `@@END`. Changing a field means updating buildPrompt, parseSunoText and App rendering together.
 - Structure copy text (`formatStructure`) is a contract with Lyricpad (`gp-songtools/lyricpad`), which parses it: see `docs/structure-format.md`. Rhyme and syllables are one value per lyric line. Change the format only together with that doc and Lyricpad's parser.
 - YouTube Music input: `normalizeYouTubeUrl` → `fileData.fileUri` part + `mediaResolution: MEDIA_RESOLUTION_LOW`. Only YouTube links (Gemini can't fetch Spotify). Public tracks only.
 - `STYLE_PROMPT_MAX = 1000` (user's choice; do not raise). The style prompt never contains artist or song names (Suno rejects them).

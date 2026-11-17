@@ -6,7 +6,7 @@ All notable changes to GP Blueprint (formerly Suno Style Creator), newest first.
 
 ### Added
 
-- **Choose Suno or Mozart AI** at the top of the form. Mozart mode gives a detailed prompt for Mozart's ElevenLabs model (with BPM, key, exclusions and length), a short prompt for the Hans models, single-instrument stem prompts, plain section tags like [CHORUS], and lyrics under 3,000 characters. Your choice is remembered on this device.
+- **Choose Suno or Mozart AI** at the top of the form. Mozart mode gives a short prompt for Mozart's Hans 2.0 model (genre, mood, instruments, vocals, BPM and key, and what the song is about, in up to 280 characters), plus the song structure with plain section tags like [CHORUS] and lyrics under 3,000 characters. Your choice is remembered on this device.
 
 ### Changed
 
