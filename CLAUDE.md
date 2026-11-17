@@ -42,7 +42,7 @@ public/changelog.html → static page that fetches and renders CHANGELOG.md; edi
 5. Final: `fitStylePrompt(style)` trims to STYLE_PROMPT_MAX at a sentence boundary; `meterCheck` compares lyrics to the target meter.
 
 ## Conventions & guardrails
-- Gemini reply is plain text with markers (no JSON schema, so it can stream): `@@STYLE`, `@@TEMPO` (bpm:/key:), `@@STEMS` (`group || prompt`), `@@STRUCTURE` (`name || bars || seconds || lines-or-#block || rhyme || meter || description || suno tag`), `@@LYRICS`, `@@END`. Changing a field means updating buildPrompt, parseSunoText and App rendering together.
+- Gemini reply is plain text with markers (no JSON schema, so it can stream): `@@STYLE`, `@@HANS` (Mozart mode only, one line ≤ HANS_PROMPT_MAX), `@@TEMPO` (bpm:/key:), `@@STEMS` (`group || prompt`), `@@STRUCTURE` (`name || bars || seconds || lines-or-#block || rhyme || meter || description || suno tag`), `@@LYRICS`, `@@END`. Changing a field means updating buildPrompt, parseSunoText and App rendering together.
 - Structure copy text (`formatStructure`) is a contract with Lyricpad (`gp-songtools/lyricpad`), which parses it: see `docs/structure-format.md`. Rhyme and syllables are one value per lyric line. Change the format only together with that doc and Lyricpad's parser.
 - YouTube Music input: `normalizeYouTubeUrl` → `fileData.fileUri` part + `mediaResolution: MEDIA_RESOLUTION_LOW`. Only YouTube links (Gemini can't fetch Spotify). Public tracks only.
 - `STYLE_PROMPT_MAX = 1000` (user's choice; do not raise). The style prompt never contains artist or song names (Suno rejects them).
@@ -50,7 +50,7 @@ public/changelog.html → static page that fetches and renders CHANGELOG.md; edi
 - Errors: throw `GeminiError(msg, {retryable, busy, status, cancelled, partial})`. `busy` (503/429/timeout) → retry once, then next model from `fallbackModels`; never retry once text has streamed. Idle timeout 120 s between chunks.
 - MusicAtlas: call tools ONE AT A TIME (parallel calls return 500 "non-JSON response"); retry once on 5xx/timeout. Browser can't reach it directly (no CORS) → default URL is the proxy.
 - Proxy: origin allowlist in worker.js (`gp-songtools.github.io`, old `pcarenza.github.io`, localhost:5173/4173); `UPSTREAM` env var overrides the target.
-- localStorage keys: `gemini.model`, `gemini.rememberKey`, `gemini.key` (only while rememberKey is on; removed when it's off), `mcp.enabled`, `mcp.url`. Always wrap access in try/catch (readPref/writePref helpers). A saved `DIRECT_MUSICATLAS_URL` is migrated to the proxy on load.
+- localStorage keys: `gemini.model`, `gemini.rememberKey`, `gemini.key` (only while rememberKey is on; removed when it's off), `mcp.enabled`, `mcp.url`, `prompt.target` ('suno' | 'mozart'). Always wrap access in try/catch (readPref/writePref helpers). A saved `DIRECT_MUSICATLAS_URL` is migrated to the proxy on load.
 - Styling: Tailwind utility classes inline in JSX, dark slate palette, lucide-react icons. No CSS modules.
 - Naming: camelCase JS modules in `src/`, PascalCase only for components. Constants UPPER_SNAKE.
 - `CHANGELOG.md`: add an entry in the same commit as every user-facing change: today's date heading, newest first (reuse it if it's already at the top), items under Added / Changed / Fixed, plain user wording.

@@ -2,6 +2,16 @@
 
 All notable changes to GP Blueprint (formerly Suno Style Creator), newest first. The app has no version numbers, so entries are grouped by date.
 
+## 2026-11-17 — Mozart AI prompts
+
+### Added
+
+- **Choose Suno or Mozart AI** at the top of the form. Mozart mode gives a detailed prompt for Mozart's ElevenLabs model (with BPM, key, exclusions and length), a short prompt for the Hans models, single-instrument stem prompts, plain section tags like [CHORUS], and lyrics under 3,000 characters. Your choice is remembered on this device.
+
+### Changed
+
+- **Suno style prompts follow a clearer order**: genre with subgenre influences, mood, main and supporting instruments, vocals, how the song develops, then production.
+
 ## 2026-11-14 — Pipe-separated section tags
 
 ### Changed

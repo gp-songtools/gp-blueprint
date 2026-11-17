@@ -4,7 +4,7 @@ import { DEFAULT_MCP_URL, DIRECT_MUSICATLAS_URL } from './mcpConfig';
 
 // The MCP SDK is loaded on demand so it doesn't weigh down the first page load.
 const loadMcp = () => import('./mcp');
-import { listModels, pickDefaultModel, fallbackModels, buildPrompt, generateSunoPrompt, parseSunoText, normalizeYouTubeUrl, fitStylePrompt, STYLE_PROMPT_MAX } from './gemini';
+import { listModels, pickDefaultModel, fallbackModels, buildPrompt, generateSunoPrompt, parseSunoText, normalizeYouTubeUrl, fitStylePrompt, STYLE_PROMPT_MAX, HANS_PROMPT_MAX } from './gemini';
 import { splitBlocks, applyCounts, sectionHeader, meterCheck, formatStructure, formatDuration } from './lyrics';
 
 const readPref = (key, fallback) => {
@@ -156,6 +156,8 @@ export default function App() {
   const [testing, setTesting] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
 
+  const [target, setTarget] = useState(() => (readPref('prompt.target', 'suno') === 'mozart' ? 'mozart' : 'suno'));
+  useEffect(() => writePref('prompt.target', target), [target]);
   useEffect(() => writePref('mcp.enabled', useMcp), [useMcp]);
   useEffect(() => writePref('mcp.url', mcpUrl), [mcpUrl]);
 
@@ -227,7 +229,7 @@ export default function App() {
       const sections = applyCounts(p.sections, blocks);
       const style = final ? fitStylePrompt(p.style) : { text: p.style, trimmed: false };
       return {
-        ...p, sections, style: style.text, styleTrimmed: style.trimmed,
+        ...p, target, sections, style: style.text, styleTrimmed: style.trimmed,
         bpm: measured.bpm || p.bpm, key: measured.key || p.key,
         measured: { bpm: !!measured.bpm, key: !!measured.key }, origin,
         source, streaming: !final, check: final ? meterCheck(sections, p.lyrics) : '',
@@ -281,6 +283,7 @@ export default function App() {
           blocks,
           reference: buildReferenceBlock(ctx),
           hasAudio: !!youtubeUrl,
+          target,
         }),
       });
       const r = compose(text, true);
@@ -371,9 +374,9 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
         
         <section className="text-center space-y-3 mb-4">
-          <h2 className="text-3xl font-bold text-white">Generate Suno.ai Styles & Lyrics</h2>
+          <h2 className="text-3xl font-bold text-white">Styles & Lyrics for Suno or Mozart AI</h2>
           <p className="text-slate-400 max-w-lg mx-auto">
-            Enter an artist, a song and a topic to get a Suno style prompt, per-instrument stem prompts, a section-by-section structure, and original Suno-ready lyrics.
+            Enter an artist, a song and a topic to get a style prompt, per-instrument stem prompts, a section-by-section structure, and original lyrics for Suno or Mozart AI.
           </p>
         </section>
 
@@ -383,6 +386,27 @@ export default function App() {
           <div className="lg:col-span-5 lg:sticky lg:top-24">
             <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-sm">
               <div className="space-y-4 mb-4">
+                <div className="space-y-2">
+                  <span className="text-sm font-medium text-slate-300">Write prompts for</span>
+                  <div className="grid grid-cols-2 gap-1 p-1 bg-slate-800 border border-slate-700 rounded-lg" role="group" aria-label="Write prompts for">
+                    {[['suno', 'Suno'], ['mozart', 'Mozart AI']].map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setTarget(id)}
+                        aria-pressed={target === id}
+                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${target === id ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-700'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {target === 'mozart'
+                      ? "Detailed prompt for Mozart's ElevenLabs model, a short one for Hans, stems, structure and lyrics."
+                      : 'Style prompt, stems, tagged structure and lyrics for Suno.'}
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
                     <Mic2 className="w-4 h-4 text-purple-400" /> Artist Name <span className="text-red-400">*</span>
@@ -626,15 +650,17 @@ export default function App() {
                 <div className="bg-slate-900 rounded-2xl border border-purple-500/30 overflow-hidden shadow-2xl shadow-purple-900/10">
                   <div className="bg-slate-800/50 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
                     <h3 className="font-semibold text-purple-300 flex items-center gap-2">
-                      <Play className="w-4 h-4 fill-current" /> Suno Style Prompt
+                      <Play className="w-4 h-4 fill-current" /> {view.target === 'mozart' ? 'Mozart Prompt · ElevenLabs model' : 'Suno Style Prompt'}
                     </h3>
                     {copyButton(view.style, 'tags')}
                   </div>
                   <div className="p-6">
                     {view.style ? (
                       <p className="text-base leading-relaxed text-slate-200 whitespace-pre-wrap">
-                        <span className="block mb-2 font-medium text-slate-100">{view.style.split('\n')[0]}</span>
-                        {view.style.split('\n').slice(1).join('\n').trim()}
+                        {view.target === 'mozart' ? view.style : (<>
+                          <span className="block mb-2 font-medium text-slate-100">{view.style.split('\n')[0]}</span>
+                          {view.style.split('\n').slice(1).join('\n').trim()}
+                        </>)}
                       </p>
                     ) : waiting(view.streaming ? 'Writing the style prompt...' : 'No style prompt.')}
                     {view.style && (
@@ -653,7 +679,9 @@ export default function App() {
                         </>
                       )}
                       <span className="w-1 h-1 rounded-full bg-slate-600"></span>
-                      <span>Ready for Suno.ai "Style of Music" box</span>
+                      <span>{view.target === 'mozart'
+                        ? "Paste into Mozart's prompt box with the ElevenLabs model selected. Tempo and key are honored."
+                        : 'Ready for Suno.ai "Style of Music" box'}</span>
                       {modelUsed && (
                         <>
                           <span className="w-1 h-1 rounded-full bg-slate-600"></span>
@@ -667,11 +695,38 @@ export default function App() {
                   </div>
                 </div>
 
+                {view.target === 'mozart' && view.hans && (
+                  <div className="bg-slate-900 rounded-2xl border border-purple-500/30 overflow-hidden shadow-2xl shadow-purple-900/10">
+                    <div className="bg-slate-800/50 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                      <h3 className="font-semibold text-purple-300 flex items-center gap-2">
+                        <Play className="w-4 h-4 fill-current" /> Mozart Prompt · Hans models
+                      </h3>
+                      {copyButton(view.hans, 'hans')}
+                    </div>
+                    <div className="p-6">
+                      <p className="text-base leading-relaxed text-slate-200 whitespace-pre-wrap">{view.hans}</p>
+                      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <span className={
+                          view.hans.length > HANS_PROMPT_MAX ? 'text-red-400 font-medium'
+                            : view.hans.length > HANS_PROMPT_MAX * 0.9 ? 'text-amber-300 font-medium'
+                            : 'text-emerald-400 font-medium'
+                        }>
+                          {view.hans.length.toLocaleString()} / {HANS_PROMPT_MAX.toLocaleString()} chars
+                        </span>
+                        <span className="w-1 h-1 rounded-full bg-slate-600"></span>
+                        <span>Short brief for Hans 2.0 / 1.0. Hans treats tempo and key as suggestions.</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg">
                   <h4 className="font-medium text-amber-300 uppercase tracking-wider text-xs flex items-center gap-2 mb-1">
                     <Layers className="w-4 h-4" /> Stem Layer Prompts
                   </h4>
-                  <p className="text-xs text-slate-500 mb-4">One prompt per instrument group, each for generating that layer on its own in Suno.</p>
+                  <p className="text-xs text-slate-500 mb-4">{view.target === 'mozart'
+                    ? "One prompt per instrument group, for generating single-instrument stems with Mozart's ElevenLabs model."
+                    : 'One prompt per instrument group, each for generating that layer on its own in Suno.'}</p>
                   {view.stems.length === 0 && waiting(view.streaming ? 'Waiting for stem prompts...' : 'No stem prompts.')}
                   <div className="space-y-3">
                     {view.stems.map((stem, i) => (
@@ -769,7 +824,7 @@ export default function App() {
                 <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg hover:border-slate-700 transition-colors">
                   <div className="flex justify-between items-start mb-4">
                     <h4 className="font-medium text-indigo-400 uppercase tracking-wider text-xs flex items-center gap-2">
-                      <FileText className="w-4 h-4" /> Sample Lyrics (Suno Ready)
+                      <FileText className="w-4 h-4" /> Sample Lyrics ({view.target === 'mozart' ? 'Mozart' : 'Suno'} Ready)
                     </h4>
                     {copyButton(view.lyrics, 'lyrics', 'Copy Lyrics')}
                   </div>
@@ -785,7 +840,9 @@ export default function App() {
                     ) : waiting(view.streaming ? 'Waiting for lyrics...' : 'No lyrics.')}
                   </div>
                   <p className="text-xs text-slate-500 mt-3">
-                    Original lyrics written to fit the structure above, with Suno section tags. Paste into Suno's lyrics box.
+                    Original lyrics written to fit the structure above, {view.target === 'mozart'
+                      ? "with section tags. Paste into Mozart's lyrics box (custom lyrics)."
+                      : "with Suno section tags. Paste into Suno's lyrics box."}
                     {view.check && <span className="text-slate-400"> · {view.check}</span>}
                   </p>
                 </div>
@@ -824,13 +881,13 @@ export default function App() {
                   <div className="flex flex-col items-center animate-in fade-in duration-300">
                     <Loader2 className="w-12 h-12 animate-spin text-purple-500 mb-6" />
                     <p className="text-lg text-slate-300 font-medium">{mcpStage === 'mcp' ? 'Fetching audio analysis over MCP...' : 'Analyzing Musical Style...'}</p>
-                    <p className="text-sm mt-2 max-w-sm">Generating Suno.ai tags, song structure, and writing original lyrics.</p>
+                    <p className="text-sm mt-2 max-w-sm">Generating the style prompt, song structure, and writing original lyrics.</p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
                     <Sparkles className="w-12 h-12 text-slate-700 mb-6" />
                     <p className="text-lg text-slate-400 font-medium">No results generated yet.</p>
-                    <p className="text-sm mt-2 max-w-sm">Fill out the form on the left to create a highly optimized Suno.ai prompt based on any artist or theme.</p>
+                    <p className="text-sm mt-2 max-w-sm">Fill out the form on the left to create a highly optimized prompt for Suno or Mozart AI based on any artist or theme.</p>
                   </div>
                 )}
               </div>
