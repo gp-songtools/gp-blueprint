@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Music, Mic2, Disc, Copy, Check, Sparkles, AlertCircle, Loader2, Play, FileText, MessageSquare, Key, Plug, Radio, Users, ChevronDown, Layers, ListMusic, Eraser, ClipboardList, Headphones, Square } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Music, Mic2, Disc, Copy, Check, Sparkles, AlertCircle, Loader2, Play, FileText, MessageSquare, Key, Plug, Radio, Users, ChevronDown, Layers, ListMusic, Eraser, ClipboardList, Headphones, Square, Save } from 'lucide-react';
 import { DEFAULT_MCP_URL, DIRECT_MUSICATLAS_URL } from './mcpConfig';
 
 // The MCP SDK is loaded on demand so it doesn't weigh down the first page load.
 const loadMcp = () => import('./mcp');
 import { listModels, pickDefaultModel, fallbackModels, buildPrompt, generateSunoPrompt, parseSunoText, normalizeYouTubeUrl, fitStylePrompt, STYLE_PROMPT_MAX, HANS_PROMPT_MAX } from './gemini';
 import { splitBlocks, applyCounts, sectionHeader, meterCheck, formatStructure, formatDuration } from './lyrics';
+import { SongSpec, specInputs, usedSections, usedText, analysisBlock, bpmKeyNote, overwriteNotes, specWrite } from './spec';
 
 const readPref = (key, fallback) => {
   try {
@@ -99,6 +100,19 @@ export default function App() {
   const [writing, setWriting] = useState(false); // Gemini has started sending text
   const [mcpStep, setMcpStep] = useState('');
   const abortRef = useRef(null);
+
+  // The GP Song Tools song spec, shared with the other tools in this browser (see src/spec.js).
+  const [specText, setSpecText] = useState(() => SongSpec.store.load());
+  const specDoc = useMemo(() => SongSpec.parse(specText || SongSpec.create()), [specText]);
+  const specIn = useMemo(() => specInputs(specDoc), [specDoc]);
+  const [useAnalysis, setUseAnalysis] = useState(true);
+  const [setBpmKey, setSetBpmKey] = useState(true);
+  const [specMsg, setSpecMsg] = useState(null); // { ok, text }
+  const panelRef = useRef(null);
+  useEffect(() => {
+    const panel = SongSpec.mountPanel(panelRef.current, { onChange: () => setSpecText(SongSpec.store.load()) });
+    return () => panel.destroy();
+  }, []);
 
   // Tick once a second while generating, for the elapsed-time status.
   useEffect(() => {
@@ -208,6 +222,8 @@ export default function App() {
     setNow(Date.now());
 
     const pasted = lyrics.trim();
+    const specUsed = usedSections(specIn, { topic, lyrics, analysis: useAnalysis });
+    setSpecMsg(null);
     const blocks = pasted ? splitBlocks(pasted).slice(0, 40) : [];
     const source = blocks.length ? 'Lines and syllables (green) counted from your pasted lyrics. Section names, rhyme and tags by Gemini.'
       : youtubeUrl ? 'Heard by Gemini from the YouTube Music recording. Paste the lyrics for exact line and syllable counts.'
@@ -233,6 +249,7 @@ export default function App() {
         bpm: measured.bpm || p.bpm, key: measured.key || p.key,
         measured: { bpm: !!measured.bpm, key: !!measured.key }, origin,
         source, streaming: !final, check: final ? meterCheck(sections, p.lyrics) : '',
+        run: { artist: artist.trim(), song: song.trim(), youtube: youtubeUrl, used: specUsed },
       };
     };
     setResult(compose('', false));
@@ -281,7 +298,7 @@ export default function App() {
           topic: topic.trim(),
           lyrics: pasted,
           blocks,
-          reference: buildReferenceBlock(ctx),
+          reference: buildReferenceBlock(ctx) + (specUsed.includes('analysis') ? analysisBlock(specIn.analysis.text) : ''),
           hasAudio: !!youtubeUrl,
           target,
         }),
@@ -291,7 +308,7 @@ export default function App() {
       setModelUsed(used);
       if (!r.style || !r.sections.length) setError("Gemini's answer was missing some parts. Press Generate to try again.");
       else if (truncated) setError('Gemini ran out of room before finishing. Press Generate to try again.');
-      else setStatus('Done.');
+      else setStatus(specUsed.length ? `Done. Used from the song spec: ${usedText(specDoc, specUsed)}.` : 'Done.');
     } catch (err) {
       console.error(err);
       setResult(err.partial ? compose(err.partial, true) : null);
@@ -306,6 +323,20 @@ export default function App() {
   };
 
   const stopGenerating = () => abortRef.current?.abort();
+
+  // Writes this result's Style, Structure, Stems and Reference (and BPM/key if ticked) into the song spec.
+  const saveToSpec = () => {
+    if (!result?.run || result.streaming) return;
+    const notes = overwriteNotes(SongSpec.parse(SongSpec.store.load() || SongSpec.create()));
+    if (notes.length && !window.confirm(`${notes.join('\n')}\n\nReplace them with this result?`)) return;
+    const doc = SongSpec.store.update((d) => specWrite(d, result, result.run, { setBpmKey }));
+    const saved = SongSpec.store.load() === SongSpec.serialize(doc);
+    setSpecText(SongSpec.store.load());
+    const parts = ['Style', 'Structure', result.stems?.length ? 'Stems' : '', 'Reference', setBpmKey ? 'BPM and key' : ''].filter(Boolean);
+    setSpecMsg(saved
+      ? { ok: true, text: `Saved to the song spec: ${parts.join(', ')}.${result.target === 'mozart' ? ' Style holds the Mozart prompt; Stems is empty (Mozart mode has none).' : ''}` }
+      : { ok: false, text: 'This browser blocked saving the song spec (private mode or storage full). Use Download in the Song spec panel instead.' });
+  };
 
   // Clears the song inputs and results; keeps the API key, model and MCP settings.
   const clearAll = () => {
@@ -386,6 +417,7 @@ export default function App() {
           {/* Left Panel: Form */}
           <div className="lg:col-span-5 lg:sticky lg:top-24">
             <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-sm">
+              <div ref={panelRef} className="text-slate-300 -mt-3 mb-3" />
               <div className="space-y-4 mb-4">
                 <div className="space-y-2">
                   <span className="text-sm font-medium text-slate-300">Write prompts for</span>
@@ -436,6 +468,34 @@ export default function App() {
                 </div>
               </div>
               
+              {(specIn.topic || specIn.lyrics || specIn.analysis) && (
+                <div className="mb-6 p-3 rounded-lg border border-slate-700 bg-slate-800/40 space-y-2 text-xs text-slate-300">
+                  <p className="font-medium text-slate-200">From the song spec <span className="text-slate-500 font-normal">(optional)</span></p>
+                  {specIn.topic && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="flex-1 min-w-0 break-words">Topic from {SongSpec.toolName(specIn.topic.by)}: “{specIn.topic.text}”</span>
+                      {topic.trim() === specIn.topic.text
+                        ? <span className="text-emerald-400">In use</span>
+                        : <button type="button" onClick={() => setTopic(specIn.topic.text)} className="px-2 py-1 rounded border border-slate-600 hover:bg-slate-700">Use as topic</button>}
+                    </div>
+                  )}
+                  {specIn.lyrics && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="flex-1 min-w-0">Lyrics from {SongSpec.toolName(specIn.lyrics.by)} ({specIn.lyrics.text.split('\n').filter((l) => l.trim() && !/^\s*\[[^\]]*\]\s*$/.test(l)).length} lines)</span>
+                      {lyrics.trim() && SongSpec.normalize(lyrics) === SongSpec.normalize(specIn.lyrics.text)
+                        ? <span className="text-emerald-400">In use</span>
+                        : <button type="button" onClick={() => setLyrics(specIn.lyrics.text)} className="px-2 py-1 rounded border border-slate-600 hover:bg-slate-700">Use for the structure</button>}
+                    </div>
+                  )}
+                  {specIn.analysis && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={useAnalysis} onChange={(e) => setUseAnalysis(e.target.checked)} className="accent-purple-500" />
+                      Add {SongSpec.toolName(specIn.analysis.by)}'s analysis to the prompt (tempo, key, mood, instruments)
+                    </label>
+                  )}
+                </div>
+              )}
+
               <div className="mb-6 space-y-2">
                 <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-pink-400" /> Lyrical Topic <span className="text-xs text-slate-500">(Optional)</span>
@@ -644,6 +704,23 @@ export default function App() {
                 {loading && <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" aria-hidden="true" />}
                 <span>{loading ? liveStatus : status || 'Fill in an artist and press Generate. Below is what a result looks like.'}</span>
                 {loading && genStatus && <span className="text-amber-300">{genStatus}</span>}
+              </div>
+            )}
+            {result?.run && !result.streaming && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm">
+                <button
+                  type="button"
+                  onClick={saveToSpec}
+                  title="Write this result's style, structure, stems and reference into the song spec the other GP Song Tools read"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 text-slate-100 font-medium flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" /> Save to song spec
+                </button>
+                <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                  <input type="checkbox" checked={setBpmKey} onChange={(e) => setSetBpmKey(e.target.checked)} className="accent-purple-500" />
+                  Set the song's BPM and key{bpmKeyNote(specDoc) ? ` (${bpmKeyNote(specDoc)})` : ''}
+                </label>
+                {specMsg && <span className={`w-full text-xs ${specMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{specMsg.text}</span>}
               </div>
             )}
             {view ? (

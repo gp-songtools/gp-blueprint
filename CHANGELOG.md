@@ -2,6 +2,14 @@
 
 All notable changes to GP Blueprint (formerly Suno Style Creator), newest first. The app has no version numbers, so entries are grouped by date.
 
+## 2026-11-18 — Song spec
+
+### Added
+
+- **Song spec panel** at the top of the form: the song file shared by the GP Song Tools in this browser. See which tool filled each part and when, clear a part, start a new song, open a `.songspec.md` file or download one to hand to Claude.
+- **From the song spec:** when other tools have saved Idea Wizard's topic, Lyricpad's lyrics or Earprint's analysis, the form offers them. Use the topic or lyrics with one click, and tick whether to add Earprint's analysis to the prompt. When a result used any of them, the status line says which.
+- **Save to song spec** under the results stores the style prompt, song structure, stem prompts and the artist, song and link you used, marked "never send to Suno". In Mozart mode the Style part holds the Mozart prompt and Stems is left empty. **Set the song's BPM and key** (on by default) also saves the tempo and key, and says when it would replace Earprint's.
+
 ## 2026-11-17 — Mozart AI prompts
 
 ### Added

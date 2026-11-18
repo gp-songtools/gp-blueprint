@@ -33,6 +33,14 @@ Deploy the small proxy in `mcp-proxy/` (a Cloudflare Worker). Then set the app's
 cd mcp-proxy && npx wrangler deploy
 ```
 
+## Song spec
+
+GP Blueprint reads and writes the GP Song Tools **song spec**, one Markdown file per song that every tool fills in its own part of ([format](https://github.com/gp-songtools/toolsmenu/blob/main/songspec/SPEC.md)). A copy is shared by the tools in this browser.
+
+- **Writes** (Save to song spec): Style, Structure, Stems, Reference (never sent to Suno), and BPM and key when "Set the song's BPM and key" is ticked.
+- **Reads, all optional:** Idea Wizard's topic, Lyricpad's lyrics (for an exact structure) and Earprint's analysis (added to the prompt when ticked). Without them, the app works as before.
+- Code: `src/spec.js` (no React; tests in `tests/spec.test.mjs`, run `npm test`). `src/songspec.js` is a copy of `gp-songtools/toolsmenu/songspec/songspec.js`: never edit it here.
+
 ## Privacy & credits
 
 No server or account of its own: your key goes only to Google, and MusicAtlas requests pass through the stateless proxy in `mcp-proxy/`. Pages load Cloudflare Web Analytics, shared by all GP Song Tools, for anonymous visit counts (no cookies; it never sees your inputs or key). Built with React, Tailwind CSS, Lucide icons and the Model Context Protocol SDK; audio analysis by MusicAtlas. Details: [Privacy & credits](https://gp-songtools.github.io/toolsmenu/privacy.html).

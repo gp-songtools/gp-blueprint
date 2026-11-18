@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'src/songspec.js']), // songspec.js: vendored copy from gp-songtools/toolsmenu
   {
     files: ['**/*.{js,jsx}'],
     extends: [

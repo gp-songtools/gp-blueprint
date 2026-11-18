@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 GP Blueprint (formerly Suno Style Creator / SunoPrompt AI): Suno prompt generator: artist/song/topic/lyrics/YouTube Music link → style prompt, stem prompts, section structure, lyrics.
-React 19 + Vite 7, plain JavaScript (no TypeScript, no test suite). Gemini REST API + MusicAtlas MCP. Deployed to GitHub Pages at https://gp-songtools.github.io/gp-blueprint/ (repo `gp-songtools/gp-blueprint`; renamed from `suno-style-creator` on 2026-11-09, moved from `pcarenza` before that).
+React 19 + Vite 7, plain JavaScript (no TypeScript; `npm test` runs the song spec tests). Gemini REST API + MusicAtlas MCP. Deployed to GitHub Pages at https://gp-songtools.github.io/gp-blueprint/ (repo `gp-songtools/gp-blueprint`; renamed from `suno-style-creator` on 2026-11-09, moved from `pcarenza` before that).
 
 ## Commands (run from repo root; keep output quiet)
 - Install: `npm ci --silent --no-audit --no-fund`
@@ -13,7 +13,8 @@ React 19 + Vite 7, plain JavaScript (no TypeScript, no test suite). Gemini REST 
   `node -e "import('./src/gemini.js').then(m=>console.log(m.pickDefaultModel(['gemini-3.6-flash'])))"`
 - UI check: Playwright + Chromium are preinstalled (`require('playwright')`); stub `generativelanguage.googleapis.com` with `page.route`
 - Proxy local run: `cd mcp-proxy && npx wrangler dev --var UPSTREAM:<url>`; deploy: `npx wrangler deploy` (user's Cloudflare account)
-- Done = lint passes + build passes (+ Playwright check for UI changes)
+- Tests: `npm test` (Node's built-in runner, `tests/*.test.mjs`)
+- Done = lint passes + tests pass + build passes (+ Playwright check for UI changes)
 
 ## Architecture
 ```
@@ -23,6 +24,8 @@ src/App.jsx           → ALL UI + state (useState/useEffect only; no router, no
   ├─ src/gemini.js    → Gemini streaming client + prompt + @@-marker parser + YouTube URL normalizer (no React)
   ├─ src/lyrics.js    → syllable/line counting, block splitting, section headers, meter check (no React)
   ├─ src/mcp.js       → MCP client, loaded via dynamic import() (no React)
+  ├─ src/spec.js      → song spec: optional inputs (Idea topic, Lyrics, Analysis) and writing Style/Structure/Stems/Reference/bpm/key (no React)
+  │    └─ src/songspec.js → vendored copy of gp-songtools/toolsmenu songspec/songspec.js; never edit here (eslint-ignored)
   └─ src/mcpConfig.js → DEFAULT_MCP_URL, DIRECT_MUSICATLAS_URL (no imports)
 src/index.css         → `@import "tailwindcss"` + base bg
 mcp-proxy/worker.js   → Cloudflare Worker CORS proxy for MusicAtlas (separate deploy)
@@ -30,7 +33,7 @@ vite.config.js        → react() + tailwindcss() + copy-changelog (ships CHANGE
 public/changelog.html → static page that fetches and renders CHANGELOG.md; edit only the .md
 .github/workflows/deploy.yml → push to main: npm ci + build → gh-pages branch
 ```
-- Dependency direction: App → gemini, lyrics, mcp, mcpConfig; mcp → mcpConfig. gemini.js, lyrics.js and mcp.js never import React or App.
+- Dependency direction: App → gemini, lyrics, mcp, mcpConfig, spec; mcp → mcpConfig; spec → songspec, lyrics. gemini.js, lyrics.js and mcp.js never import React or App.
 - Keep `mcp.js` behind `import()` (it pulls in the ~390 KB MCP SDK); mcpConfig.js stays separate so App can read the URL without loading the SDK.
 - `src/assets/react.svg` is unused template leftover; the favicon is the 🎨 emoji as an inline SVG `<link rel="icon">` in `index.html` and `public/changelog.html` (matches the GP Song Tools menu card).
 
@@ -42,6 +45,7 @@ public/changelog.html → static page that fetches and renders CHANGELOG.md; edi
 5. Final: `fitStylePrompt(style)` trims to STYLE_PROMPT_MAX at a sentence boundary; `meterCheck` compares lyrics to the target meter.
 
 ## Conventions & guardrails
+- Song spec (format: gp-songtools/toolsmenu `songspec/SPEC.md`): Blueprint owns only Style, Structure, Stems, Reference (never sent to Suno) and, behind "Set the song's BPM and key", `bpm`/`key`/`bpm_key_by`. It only reads Idea, Lyrics and Analysis, and must work unchanged when they are missing. A save replaces all Blueprint sections from one run (Mozart mode: Style = the Hans prompt, Stems empty). To update the library, copy it from toolsmenu; `node toolsmenu/songspec/check-copies.js` checks the copies.
 - Gemini reply is plain text with markers (no JSON schema, so it can stream): `@@STYLE` (in Mozart mode: one Hans 2.0 line ≤ HANS_PROMPT_MAX; no `@@STEMS`), `@@TEMPO` (bpm:/key:), `@@STEMS` (`group || prompt`), `@@STRUCTURE` (`name || bars || seconds || lines-or-#block || rhyme || meter || description || suno tag`), `@@LYRICS`, `@@END`. Changing a field means updating buildPrompt, parseSunoText and App rendering together.
 - Structure copy text (`formatStructure`) is a contract with Lyricpad (`gp-songtools/lyricpad`), which parses it: see `docs/structure-format.md`. Rhyme and syllables are one value per lyric line. Change the format only together with that doc and Lyricpad's parser.
 - YouTube Music input: `normalizeYouTubeUrl` → `fileData.fileUri` part + `mediaResolution: MEDIA_RESOLUTION_LOW`. Only YouTube links (Gemini can't fetch Spotify). Public tracks only.
