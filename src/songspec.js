@@ -1,4 +1,4 @@
-/* songspec v1.0.0 — the GP Song Tools song spec: parse, edit, validate, share.
+/* songspec v1.0.1 — the GP Song Tools song spec: parse, edit, validate, share.
  * Canonical copy: gp-songtools/toolsmenu/songspec/songspec.js. Tools keep a byte-identical
  * copy; never edit a copy, change this file and copy it again. Format: songspec/SPEC.md.
  * No dependencies. Works as a classic <script> (global SongSpec), an ES/CommonJS import, and
@@ -11,12 +11,13 @@
  *   exception is clearSection/newSong, which run only on the person's click.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.SongSpec = factory();
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.SongSpec = api; // also global, so browser scripts, ES modules and Node all find it the same way
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.0.1';
   const SCHEMA_VERSION = 1;
   const PERSON = 'person';
 
@@ -153,7 +154,7 @@
     let out = '';
     if (doc.fm) out += doc.fm.open + doc.fm.items.map((x) => x.line).join('') + doc.fm.close;
     out += doc.pre.join('');
-    for (const s of doc.sections) out += s.head + s.lines.join('');
+    for (const s of doc.sections) out += (s.pad || []).join('') + s.head + s.lines.join('');
     return out;
   }
 
@@ -335,19 +336,20 @@
     if (sec) { sec.lines = chunk.lines; return; } // keep the existing heading line as written
     const idx = SEC[id].index;
     const e = doc.eol;
-    // Make sure whatever comes before ends with a blank line.
-    const tailOf = (arr) => arr.length ? arr[arr.length - 1] : null;
     let at = doc.sections.length;
     for (let k = 0; k < doc.sections.length; k++) {
       const sid = doc.sections[k].id;
       if (sid && SEC[sid].index > idx) { at = k; break; }
     }
+    // Separate it from whatever comes before with a blank line, carried by the new section
+    // (`pad`), so the section before it stays byte for byte as it was.
     const prev = at > 0 ? doc.sections[at - 1].lines : doc.pre;
-    const last = tailOf(prev);
-    if (last !== null && !/\n$/.test(last)) prev[prev.length - 1] = last + e;
-    if (last !== null && strip(prev[prev.length - 1]).trim() !== '') prev.push(e);
+    const last = prev.length ? prev[prev.length - 1] : at > 0 ? doc.sections[at - 1].head : null; // heading-only section
+    const pad = [];
+    if (last !== null && !/\n$/.test(last)) pad.push(e);
+    if (last !== null && strip(last).trim() !== '') pad.push(e);
     if (at === 0 && !doc.sections.length && !doc.pre.some((l) => l.trim())) doc.pre.push(e, `# Song spec${e}`, e);
-    doc.sections.splice(at, 0, { id, heading: SEC[id].heading, head: chunk.head, lines: chunk.lines });
+    doc.sections.splice(at, 0, { id, heading: SEC[id].heading, head: chunk.head, lines: chunk.lines, pad });
   }
 
   /**
