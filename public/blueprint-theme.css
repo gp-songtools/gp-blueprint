@@ -1,0 +1,100 @@
+@font-face {
+  font-family: Righteous;
+  src: url('fonts/righteous.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: Poppins;
+  src: url('fonts/poppins.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: Poppins;
+  src: url('fonts/poppins-semibold.woff2') format('woff2');
+  font-weight: 600 800;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  --bp-canvas: #0f0f23;
+  --bp-panel: #1b1b30;
+  --bp-raised: #27273b;
+  --bp-ink: #f8fafc;
+  --bp-muted: #b6b9d1;
+  --bp-line: #3f405d;
+  --bp-field: #737594;
+  --bp-accent: #aaa6fa;
+  --bp-action: #22c55e;
+  --bp-action-ink: #0f172a;
+  --bp-display: Righteous, system-ui, sans-serif;
+  --bp-body: Poppins, system-ui, sans-serif;
+}
+body {
+  margin: 0;
+  background: var(--bp-canvas);
+  color: var(--bp-ink);
+  font: 1rem/1.6 var(--bp-body);
+  font-variant-numeric: tabular-nums;
+}
+
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--bp-ink);
+  outline-offset: 3px;
+}
+input, textarea { caret-color: var(--bp-accent); }
+::selection { background: var(--bp-accent); color: var(--bp-canvas); }
+.bp-shell {
+  max-width: 1320px;
+  margin-inline: auto;
+  padding-inline: clamp(16px, 3.2vw, 40px);
+  box-sizing: border-box;
+}
+.bp-header {
+  background: var(--bp-panel);
+  border-bottom: 1px solid var(--bp-line);
+}
+.bp-nav {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.bp-nav a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--bp-muted);
+  font-size: .875rem;
+  text-decoration: none;
+}
+.bp-nav a:hover { color: var(--bp-ink); text-decoration: underline; text-underline-offset: .25em; }
+.bp-nav .bp-brand {
+  gap: 10px;
+  font: 400 1.3rem var(--bp-display);
+  color: var(--bp-ink);
+}
+.bp-brand img { display: block; }
+.bp-skip {
+  position: absolute;
+  z-index: 20;
+  inset: 8px auto auto 8px;
+  padding: 10px 14px;
+  transform: translateY(calc(-100% - 12px));
+  border-radius: 8px;
+  background: var(--bp-ink);
+  color: var(--bp-canvas);
+}
+.bp-skip:focus { transform: none; }
+.bp-title {
+  margin: 0;
+  color: var(--bp-ink);
+  font: 400 clamp(2.45rem, 4.9vw, 4.45rem)/1.03 var(--bp-display);
+  letter-spacing: -.028em;
+  text-wrap: balance;
+}
+a, button, summary, label:has(input[type="checkbox"]) { touch-action: manipulation; }

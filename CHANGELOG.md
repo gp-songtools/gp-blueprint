@@ -2,6 +2,14 @@
 
 All notable changes to GP Blueprint (formerly Suno Style Creator), newest first. The app has no version numbers, so entries are grouped by date.
 
+## 2026-11-20 — Blueprint workspace
+
+### Changed
+
+- Redesigned the generator and changelog with larger type, more readable arrangement details and layouts for desktop and mobile.
+- The example follows the selected Suno or Mozart AI mode. A shortcut opens the example or result from the top of the workspace.
+- Form errors identify the field to correct. Generation status appears next to the Generate Prompt button.
+
 ## 2026-11-18 — Song spec
 
 ### Added

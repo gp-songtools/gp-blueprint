@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Music, Mic2, Disc, Copy, Check, Sparkles, AlertCircle, Loader2, Play, FileText, MessageSquare, Key, Plug, Radio, Users, ChevronDown, Layers, ListMusic, Eraser, ClipboardList, Headphones, Square, Save } from 'lucide-react';
+import { Mic2, Disc, Copy, Check, Sparkles, AlertCircle, Loader2, Play, FileText, MessageSquare, Key, Plug, Radio, Users, ChevronDown, Layers, ListMusic, Eraser, ClipboardList, Headphones, Square, Save } from 'lucide-react';
 import { DEFAULT_MCP_URL, DIRECT_MUSICATLAS_URL } from './mcpConfig';
 
 // The MCP SDK is loaded on demand so it doesn't weigh down the first page load.
@@ -73,6 +73,15 @@ const EXAMPLE = {
 };
 
 
+const MOZART_EXAMPLE = {
+  ...EXAMPLE,
+  target: 'mozart',
+  style: 'French house at 123 BPM in G major, with filtered disco strings, four-on-the-floor drums and a bright talk-box hook about a night in the city. Let the breakdown narrow to the loop before the full groove returns.',
+  stems: [],
+  sections: EXAMPLE.sections.map((section) => ({ ...section, tags: `[${section.name.toUpperCase()}]` })),
+  lyrics: EXAMPLE.lyrics.replace(/^\[([^:\]]+):[^\]]+\]$/gm, (_, name) => `[${name.toUpperCase()}]`),
+};
+
 const STEM_COLORS = ['#f0c040', '#a78bfa', '#40c080', '#f87171', '#60a5fa', '#fb923c', '#34d399', '#e879f9', '#facc15', '#38bdf8', '#4ade80', '#f472b6'];
 
 export default function App() {
@@ -90,6 +99,7 @@ export default function App() {
   }, [rememberKey, customKey]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [validation, setValidation] = useState(null);
   const [result, setResult] = useState(null);
   const [copiedSection, setCopiedSection] = useState(null);
   const [youtube, setYoutube] = useState('');
@@ -190,22 +200,32 @@ export default function App() {
   };
 
 
+  const showValidation = (field, message) => {
+    setValidation({ field, message });
+    document.getElementById(field)?.focus();
+  };
+  const fieldValidation = (field) => validation?.field === field;
+  const validationMessage = (field) => fieldValidation(field) && (
+    <p id={`${field}-error`} role="alert" className="text-xs text-red-300">{validation.message}</p>
+  );
+
   const generatePrompt = async () => {
     if (loading) return;
     if (!artist.trim()) {
-      setError('Please enter an artist name.');
+      showValidation('reference-artist', 'Please enter an artist name.');
       return;
     }
     if (!customKey.trim()) {
-      setError('Please paste your Gemini API key.');
+      showValidation('gemini-key', 'Please paste your Gemini API key.');
       return;
     }
     const youtubeUrl = youtube.trim() ? normalizeYouTubeUrl(youtube) : '';
     if (youtube.trim() && !youtubeUrl) {
-      setError("That doesn't look like a YouTube Music song link. Copy it from the song's Share menu; it should contain \"watch?v=\".");
+      showValidation('youtube-link', 'Use a public YouTube link. Copy the link from the song’s Share menu.');
       return;
     }
 
+    setValidation(null);
     const ctl = new AbortController();
     abortRef.current = ctl;
     setLoading(true);
@@ -341,7 +361,7 @@ export default function App() {
   // Clears the song inputs and results; keeps the API key, model and MCP settings.
   const clearAll = () => {
     setArtist(''); setSong(''); setTopic(''); setLyrics(''); setYoutube('');
-    setResult(null); setError(null); setModelUsed(null); setGenStatus(null);
+    setResult(null); setError(null); setValidation(null); setModelUsed(null); setGenStatus(null);
     setMcpContext(null); setMcpWarning(null); setShowRaw(false);
     setShowExample(false); setStatus('Cleared. Enter an artist and press Generate.');
   };
@@ -368,56 +388,65 @@ export default function App() {
     document.body.removeChild(textArea);
   };
 
-  const view = result || (showExample ? EXAMPLE : null);
+  const view = result || (showExample ? (target === 'mozart' ? MOZART_EXAMPLE : EXAMPLE) : null);
   const total = view ? view.sections.reduce((a, sec) => a + (Number(sec.seconds) || 0), 0) : 0;
   const styleMax = view?.target === 'mozart' ? HANS_PROMPT_MAX : STYLE_PROMPT_MAX;
   const elapsed = Math.max(0, Math.round((now - startedAt) / 1000));
-  const liveStatus = mcpStage === 'mcp' ? `Asking MusicAtlas: ${mcpStep}...`
-    : `${model || 'Gemini'} is ${writing ? 'writing' : youtube.trim() ? 'listening' : 'thinking'}... ${elapsed}s`;
+  const liveStatus = mcpStage === 'mcp' ? `Asking MusicAtlas: ${mcpStep}…`
+    : `${model || 'Gemini'} is ${writing ? 'writing' : youtube.trim() ? 'listening' : 'thinking'}… ${elapsed}s`;
   const waiting = (text) => <span className="text-sm italic text-slate-500">{text}</span>;
-  const copyButton = (text, id, label = 'Copy') => (
+  const copyButton = (text, id, label, accessibleLabel = label) => (
     <button
       onClick={() => copyToClipboard(text, id)}
-      className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-2 border border-slate-700 shrink-0"
+      aria-label={copiedSection === id ? `Copied: ${accessibleLabel}` : accessibleLabel}
+      className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-2 border border-slate-700 shrink-0"
     >
-      {copiedSection === id ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      {copiedSection === id ? <Check aria-hidden="true" className="w-3 h-3 text-green-400" /> : <Copy aria-hidden="true" className="w-3 h-3" />}
       {copiedSection === id ? 'Copied' : label}
     </button>
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-purple-500 selection:text-white pb-12">
-      <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="bg-gradient-to-br from-purple-500 to-indigo-600 p-2 rounded-lg">
-              <Music className="w-6 h-6 text-white" />
-            </div>
-            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400">
-              GP Blueprint
-            </h1>
-          </div>
-          <span className="text-xs font-medium px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">
-            v5.0 Gemini + MCP
-          </span>
-        </div>
+    <div className="blueprint">
+      <a className="bp-skip" href="#workspace">Skip to workspace</a>
+      <header className="bp-header">
+        <nav className="bp-nav bp-shell" aria-label="Site">
+          <a className="bp-brand" href="./" translate="no">
+            <img src="blueprint-mark.svg" width="36" height="36" alt="" /> GP Blueprint
+          </a>
+          <a href="changelog.html">Changelog</a>
+        </nav>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        
-        <section className="text-center space-y-3 mb-4">
-          <h2 className="text-3xl font-bold text-white">Styles & Lyrics for Suno or Mozart AI</h2>
-          <p className="text-slate-400 max-w-lg mx-auto">
-            Enter an artist, a song and a topic to get a style prompt, per-instrument stem prompts, a section-by-section structure, and original lyrics for Suno or Mozart AI.
-          </p>
+      <main className="bp-main bp-shell" id="workspace" tabIndex={-1}>
+        <section className="bp-intro" aria-labelledby="page-title">
+          <div>
+            <h1 id="page-title" className="bp-title">From reference to arrangement.</h1>
+            <p>Start with an artist. Add a song or YouTube link for a specific reference. Use Gemini to build a style prompt, arrangement and original lyrics, plus instrument prompts for Suno.</p>
+          </div>
+          <aside className="bp-preview" aria-label="Example arrangement">
+            <div className="bp-preview-head">
+              <span className="bp-preview-title">French house example</span>
+              <span className="bp-preview-meta">{EXAMPLE.bpm} BPM / {EXAMPLE.key}</span>
+            </div>
+            <ol>
+              {EXAMPLE.sections.map((section, i) => (
+                <li key={section.name} style={{ '--section-color': STEM_COLORS[i] }}>
+                  <span>{section.name}</span>
+                  <span>{section.bars} bars</span>
+                </li>
+              ))}
+            </ol>
+            <a href="#blueprint-output">{view?.example ? 'Explore the sample blueprint' : 'Go to blueprint output'}</a>
+          </aside>
         </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Left Panel: Form */}
-          <div className="lg:col-span-5 lg:sticky lg:top-24">
-            <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-sm">
-              <div ref={panelRef} className="text-slate-300 -mt-3 mb-3" />
+        <div className="bp-workspace">
+          <section className="bp-form" aria-labelledby="reference-title">
+            <div className="bp-form-panel">
+              <h2 className="bp-form-heading" id="reference-title">Track reference</h2>
+              <p>You’ll need an artist name and a Gemini API key.</p>
+              <div ref={panelRef} className="bp-song-spec" />
               <div className="space-y-4 mb-4">
                 <div className="space-y-2">
                   <span className="text-sm font-medium text-slate-300">Write prompts for</span>
@@ -428,7 +457,7 @@ export default function App() {
                         type="button"
                         onClick={() => setTarget(id)}
                         aria-pressed={target === id}
-                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${target === id ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-700'}`}
+                        className="bp-target px-3 py-2 rounded-md text-sm font-medium transition-colors text-slate-300"
                       >
                         {label}
                       </button>
@@ -441,28 +470,34 @@ export default function App() {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                    <Mic2 className="w-4 h-4 text-purple-400" /> Artist Name <span className="text-red-400">*</span>
+                  <label htmlFor="reference-artist" className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                    <Mic2 aria-hidden="true" className="w-4 h-4 text-purple-400" /> Artist Name <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
-                    value={artist}
-                    onChange={(e) => setArtist(e.target.value)}
-                    placeholder="e.g. Daft Punk"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    id="reference-artist" name="reference-artist" autoComplete="off" value={artist}
+                    aria-invalid={fieldValidation('reference-artist') || undefined}
+                    aria-describedby={fieldValidation('reference-artist') ? 'reference-artist-error' : undefined}
+                    onChange={(e) => {
+                      setArtist(e.target.value);
+                      if (fieldValidation('reference-artist')) setValidation(null);
+                    }}
+                    placeholder="e.g. Daft Punk…"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500"
                     onKeyDown={(e) => e.key === 'Enter' && generatePrompt()}
                   />
+                  {validationMessage('reference-artist')}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                    <Disc className="w-4 h-4 text-indigo-400" /> Song Title <span className="text-xs text-slate-500">(Optional)</span>
+                  <label htmlFor="reference-song" className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                    <Disc aria-hidden="true" className="w-4 h-4 text-indigo-400" /> Song Title <span className="text-xs text-slate-500">(Optional)</span>
                   </label>
                   <input
                     type="text"
-                    value={song}
+                    id="reference-song" name="reference-song" autoComplete="off" value={song}
                     onChange={(e) => setSong(e.target.value)}
-                    placeholder="e.g. Harder, Better, Faster, Stronger"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    placeholder="e.g. One More Time…"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500"
                     onKeyDown={(e) => e.key === 'Enter' && generatePrompt()}
                   />
                 </div>
@@ -489,7 +524,7 @@ export default function App() {
                   )}
                   {specIn.analysis && (
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={useAnalysis} onChange={(e) => setUseAnalysis(e.target.checked)} className="accent-purple-500" />
+                      <input type="checkbox" name="include-song-analysis" checked={useAnalysis} onChange={(e) => setUseAnalysis(e.target.checked)} className="accent-purple-500" />
                       Add {SongSpec.toolName(specIn.analysis.by)}'s analysis to the prompt (tempo, key, mood, instruments)
                     </label>
                   )}
@@ -497,29 +532,29 @@ export default function App() {
               )}
 
               <div className="mb-6 space-y-2">
-                <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-pink-400" /> Lyrical Topic <span className="text-xs text-slate-500">(Optional)</span>
+                <label htmlFor="reference-topic" className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                  <MessageSquare aria-hidden="true" className="w-4 h-4 text-pink-400" /> Lyrical Topic <span className="text-xs text-slate-500">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  value={topic}
+                  id="reference-topic" name="reference-topic" autoComplete="off" value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="What should the song be about? (e.g. A robot learning to love)"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+                  placeholder="e.g. A robot learning to dance…"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500"
                   onKeyDown={(e) => e.key === 'Enter' && generatePrompt()}
                 />
               </div>
 
               <div className="mb-6 space-y-2">
-                <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                  <ClipboardList className="w-4 h-4 text-sky-400" /> Paste Song Lyrics <span className="text-xs text-slate-500">(Optional, for an accurate structure)</span>
+                <label htmlFor="reference-lyrics" className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                  <ClipboardList aria-hidden="true" className="w-4 h-4 text-sky-400" /> Paste Song Lyrics <span className="text-xs text-slate-500">(Optional, for an accurate structure)</span>
                 </label>
                 <textarea
-                  value={lyrics}
+                  id="reference-lyrics" name="reference-lyrics" autoComplete="off" value={lyrics}
                   onChange={(e) => setLyrics(e.target.value)}
                   rows={5}
                   placeholder={'Paste the reference song\'s lyrics to measure its real line counts, rhyme and meter.\nThey are only analyzed, never copied into the results.'}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white placeholder-slate-500 font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white placeholder-slate-500 font-mono leading-relaxed resize-y"
                 />
                 {lyrics.trim() && (
                   <p className="text-xs text-sky-400">
@@ -530,20 +565,27 @@ export default function App() {
 
               <div className="mb-6 space-y-2">
                 <label className="text-sm font-medium text-slate-300 flex items-center gap-2" htmlFor="youtube-link">
-                  <Headphones className="w-4 h-4 text-red-400" /> YouTube Music Link <span className="text-xs text-slate-500">(Optional, Gemini listens to it)</span>
+                  <Headphones aria-hidden="true" className="w-4 h-4 text-red-400" /> YouTube Music Link <span className="text-xs text-slate-500">(Optional, Gemini listens to it)</span>
                 </label>
                 <input
                   id="youtube-link"
+                  name="youtube-link" spellCheck={false}
                   type="url"
                   inputMode="url"
                   value={youtube}
-                  onChange={(e) => setYoutube(e.target.value)}
-                  placeholder="https://music.youtube.com/watch?v=..."
+                  aria-invalid={fieldValidation('youtube-link') || undefined}
+                    aria-describedby={fieldValidation('youtube-link') ? 'youtube-link-error' : 'youtube-help'}
+                    onChange={(e) => {
+                      setYoutube(e.target.value);
+                      if (fieldValidation('youtube-link')) setValidation(null);
+                    }}
+                  placeholder="https://youtu.be/…"
                   autoComplete="off"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white placeholder-slate-500 font-mono"
                   onKeyDown={(e) => e.key === 'Enter' && generatePrompt()}
                 />
-                <p className="text-xs text-slate-500">
+                {validationMessage('youtube-link')}
+                <p id="youtube-help" className="text-xs text-slate-500">
                   Gemini hears the actual recording for instruments, vocals, production and structure. Free on Gemini's free tier (Google allows about 8 hours of YouTube audio a day); a key with billing turned on pays for roughly 25,000 tokens per 4-minute song. The track must be public.
                 </p>
               </div>
@@ -551,11 +593,11 @@ export default function App() {
               <div className="mb-6 space-y-3 border-t border-slate-800 pt-6">
                 <label className="flex items-center justify-between gap-3 cursor-pointer">
                   <span className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                    <Plug className="w-4 h-4 text-emerald-400" /> Ground with MCP audio analysis
+                    <Plug aria-hidden="true" className="w-4 h-4 text-emerald-400" /> Ground with MCP audio analysis
                   </span>
                   <input
                     type="checkbox"
-                    checked={useMcp}
+                    name="musicatlas-enabled" checked={useMcp}
                     onChange={(e) => setUseMcp(e.target.checked)}
                     className="w-5 h-5 accent-emerald-500"
                   />
@@ -563,15 +605,16 @@ export default function App() {
                 {useMcp && (
                   <>
                     <p className="text-xs text-slate-500">
-                      Calls MusicAtlas tools (describe_track, find_similar_tracks, find_similar_artists) before writing the prompt, so the tags describe how the music really sounds.
+                      Use MusicAtlas measurements and similar tracks to ground the prompt in the reference recording.
                     </p>
                     <div className="flex gap-2">
                       <input
                         type="url"
+                        name="musicatlas-url" aria-label="MusicAtlas server URL" autoComplete="off" spellCheck={false}
                         value={mcpUrl}
                         onChange={(e) => setMcpUrl(e.target.value)}
                         placeholder={DEFAULT_MCP_URL}
-                        className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono"
+                        className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 font-mono"
                       />
                       <button
                         type="button"
@@ -579,7 +622,7 @@ export default function App() {
                         disabled={testing}
                         className="px-3 py-2 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 flex items-center gap-1 disabled:opacity-50"
                       >
-                        {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Radio className="w-3 h-3" />} Test
+                        {testing ? <Loader2 aria-hidden="true" className="w-3 h-3 animate-spin" /> : <Radio aria-hidden="true" className="w-3 h-3" />} Test
                       </button>
                     </div>
                     {mcpUrl.trim() !== DEFAULT_MCP_URL && (
@@ -588,27 +631,33 @@ export default function App() {
                       </button>
                     )}
                     {mcpTest && (
-                      <p className={`text-xs break-words ${mcpTest.ok ? 'text-emerald-400' : 'text-amber-400'}`}>{mcpTest.text}</p>
+                      <p role="status" className={`text-xs break-words ${mcpTest.ok ? 'text-emerald-400' : 'text-amber-400'}`}>{mcpTest.text}</p>
                     )}
                   </>
                 )}
               </div>
 
               <div className="mb-6 space-y-2 border-t border-slate-800 pt-6">
-                <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                  <Key className="w-4 h-4 text-yellow-400" /> Gemini API Key <span className="text-red-400">*</span>
+                <label htmlFor="gemini-key" className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                  <Key aria-hidden="true" className="w-4 h-4 text-yellow-400" /> Gemini API Key <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="password"
-                  value={customKey}
-                  onChange={(e) => setCustomKey(e.target.value)}
-                  placeholder="Paste your Google Gemini API key here..."
+                  id="gemini-key" name="gemini-key" spellCheck={false} value={customKey}
+                  aria-invalid={fieldValidation('gemini-key') || undefined}
+                    aria-describedby={fieldValidation('gemini-key') ? 'gemini-key-error' : undefined}
+                    onChange={(e) => {
+                      setCustomKey(e.target.value);
+                      if (fieldValidation('gemini-key')) setValidation(null);
+                    }}
+                  placeholder="Paste your Gemini API key…"
                   autoComplete="off"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500"
                 />
+                {validationMessage('gemini-key')}
                 <div className="flex items-center justify-between gap-2">
                   <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-                    <input type="checkbox" checked={rememberKey} onChange={(e) => setRememberKey(e.target.checked)} className="accent-yellow-500" />
+                    <input type="checkbox" name="remember-key" checked={rememberKey} onChange={(e) => setRememberKey(e.target.checked)} className="accent-yellow-500" />
                     Remember key on this device
                   </label>
                   {rememberKey && customKey && (
@@ -620,54 +669,50 @@ export default function App() {
                 {rememberKey && (
                   <p className="text-xs text-slate-500">Saved unencrypted in this browser only. Use a key restricted to the Gemini API, and don't check this on a shared computer.</p>
                 )}
-                <div className="flex items-center gap-2 pt-1">
+                <div className="bp-model-row flex items-center gap-2 pt-1">
                   <label className="text-xs text-slate-400 shrink-0" htmlFor="gemini-model">Model</label>
                   <select
-                    id="gemini-model"
+                    id="gemini-model" name="gemini-model"
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
                     disabled={!models.length}
                     className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono disabled:opacity-50"
                   >
-                    {!models.length && <option value={model}>{modelsLoading ? 'Loading models...' : (model || 'Paste your key to load models')}</option>}
+                    {!models.length && <option value={model}>{modelsLoading ? 'Loading models…' : (model || 'Paste your key to load models')}</option>}
                     {models.map((id) => <option key={id} value={id}>{id}</option>)}
                   </select>
-                  {modelsLoading && <Loader2 className="w-4 h-4 animate-spin text-slate-500" />}
+                  {modelsLoading && <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin text-slate-500" />}
                 </div>
-                {modelsError && <p className="text-xs text-amber-400 break-words">{modelsError}</p>}
+                {modelsError && <p role="alert" className="text-xs text-amber-400 break-words">{modelsError}</p>}
               </div>
 
               {mcpWarning && (
                 <div className="mb-6 p-3 bg-amber-900/20 border border-amber-800/60 rounded-lg flex items-start gap-3 text-amber-200">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <AlertCircle aria-hidden="true" className="w-4 h-4 flex-shrink-0 mt-0.5" />
                   <p className="text-xs break-words">{mcpWarning}</p>
                 </div>
               )}
 
               {error && (
-                <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg flex items-center gap-3 text-red-200">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <div role="alert" className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg flex items-center gap-3 text-red-200">
+                  <AlertCircle aria-hidden="true" className="w-5 h-5 flex-shrink-0" />
                   <p className="text-sm">{error}</p>
                 </div>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
               <button
                 onClick={generatePrompt}
                 disabled={loading}
-                className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all transform hover:scale-[1.01] active:scale-[0.99]
-                  ${loading 
-                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed' 
-                    : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-900/20'
-                  }`}
+                className="bp-action flex items-center gap-2"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" /> {mcpStage === 'mcp' ? 'Listening via MusicAtlas...' : 'Analyzing & Writing...'}
+                    <Loader2 aria-hidden="true" className="w-5 h-5 animate-spin" /> {mcpStage === 'mcp' ? 'Listening via MusicAtlas…' : 'Analyzing & Writing…'}
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-5 h-5" /> Generate Prompt
+                    <Sparkles aria-hidden="true" className="w-5 h-5" /> Generate Prompt
                   </>
                 )}
               </button>
@@ -678,7 +723,7 @@ export default function App() {
                   title="Stop generating and keep what has been written so far"
                   className="px-5 rounded-xl border border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center gap-2"
                 >
-                  <Square className="w-4 h-4 fill-current" /> Stop
+                  <Square aria-hidden="true" className="w-4 h-4 fill-current" /> Stop
                 </button>
               ) : (
               <button
@@ -687,23 +732,28 @@ export default function App() {
                 title="Clear the song fields and results (keeps your key and settings)"
                 className="px-5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium flex items-center gap-2"
               >
-                <Eraser className="w-4 h-4" /> Clear
+                <Eraser aria-hidden="true" className="w-4 h-4" /> Clear
               </button>
               )}
               </div>
+              <div className="bp-form-feedback" role="status">
+                {loading ? (genStatus || (writing ? 'Writing your blueprint…' : 'Preparing your blueprint…')) : status}
+              </div>
+              {result && !loading && <a className="bp-form-jump" href="#blueprint-output">View blueprint output</a>}
             </div>
-          </div>
+          </section>
 
-          {/* Right Panel: Output */}
-          <div className="lg:col-span-7 space-y-6">
+          <section className="bp-output space-y-5" aria-labelledby="blueprint-output">
+            <div className="bp-output-head" id="blueprint-output" tabIndex={-1}>
+              <h2 className="bp-output-title">Blueprint output</h2>
+            </div>
             {(loading || status || view?.example) && (
-              <div className="flex items-center gap-3 flex-wrap text-sm text-slate-400 min-h-6" aria-live="polite">
+              <div className="flex items-center gap-3 flex-wrap text-sm text-slate-400 min-h-6">
                 {view?.example && !loading && (
-                  <span className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded-full border border-amber-400/70 text-amber-300">Example output</span>
+                  <span className="text-xs font-medium px-2 py-1 rounded-md bg-amber-400/10 text-amber-300">Example output</span>
                 )}
                 {loading && <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" aria-hidden="true" />}
-                <span>{loading ? liveStatus : status || 'Fill in an artist and press Generate. Below is what a result looks like.'}</span>
-                {loading && genStatus && <span className="text-amber-300">{genStatus}</span>}
+                <span>{loading ? liveStatus : status || 'Sample results for the French house arrangement.'}</span>
               </div>
             )}
             {result?.run && !result.streaming && (
@@ -714,23 +764,23 @@ export default function App() {
                   title="Write this result's style, structure, stems and reference into the song spec the other GP Song Tools read"
                   className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 hover:bg-slate-700 text-slate-100 font-medium flex items-center gap-2"
                 >
-                  <Save className="w-4 h-4" /> Save to song spec
+                  <Save aria-hidden="true" className="w-4 h-4" /> Save to song spec
                 </button>
                 <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-                  <input type="checkbox" checked={setBpmKey} onChange={(e) => setSetBpmKey(e.target.checked)} className="accent-purple-500" />
+                  <input type="checkbox" name="set-song-tempo-and-key" checked={setBpmKey} onChange={(e) => setSetBpmKey(e.target.checked)} className="accent-purple-500" />
                   Set the song's BPM and key{bpmKeyNote(specDoc) ? ` (${bpmKeyNote(specDoc)})` : ''}
                 </label>
-                {specMsg && <span className={`w-full text-xs ${specMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{specMsg.text}</span>}
+                {specMsg && <span role="status" className={`w-full text-xs ${specMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{specMsg.text}</span>}
               </div>
             )}
             {view ? (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-slate-900 rounded-2xl border border-purple-500/30 overflow-hidden shadow-2xl shadow-purple-900/10">
-                  <div className="bg-slate-800/50 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
-                    <h3 className="font-semibold text-purple-300 flex items-center gap-2">
-                      <Play className="w-4 h-4 fill-current" /> {view.target === 'mozart' ? 'Mozart Prompt · Hans 2.0' : 'Suno Style Prompt'}
+              <div className="space-y-4">
+                <article className="bg-slate-900 border border-slate-700">
+                  <div className="bp-result-actions px-6 py-4 border-b border-slate-700">
+                    <h3 className="bp-result-heading flex items-center gap-2">
+                      <Play aria-hidden="true" className="w-4 h-4 fill-current" /> {view.target === 'mozart' ? 'Mozart Prompt · Hans 2.0' : 'Suno Style Prompt'}
                     </h3>
-                    {copyButton(view.style, 'tags')}
+                    {copyButton(view.style, 'tags', 'Copy', 'Copy style prompt')}
                   </div>
                   <div className="p-6">
                     {view.style ? (
@@ -740,7 +790,7 @@ export default function App() {
                           {view.style.split('\n').slice(1).join('\n').trim()}
                         </>)}
                       </p>
-                    ) : waiting(view.streaming ? 'Writing the style prompt...' : 'No style prompt.')}
+                    ) : waiting(view.streaming ? 'Writing the style prompt…' : 'No style prompt.')}
                     {view.style && (
                     <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                       <span className={
@@ -771,83 +821,81 @@ export default function App() {
                     </div>
                     )}
                   </div>
-                </div>
+                </article>
 
                 {view.target !== 'mozart' && (
-                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg">
-                  <h4 className="font-medium text-amber-300 uppercase tracking-wider text-xs flex items-center gap-2 mb-1">
-                    <Layers className="w-4 h-4" /> Stem Layer Prompts
-                  </h4>
+                <article className="bg-slate-900 border border-slate-700 p-6">
+                  <h3 className="bp-result-heading flex items-center gap-2 mb-1">
+                    <Layers aria-hidden="true" className="w-4 h-4" /> Stem Layer Prompts
+                  </h3>
                   <p className="text-xs text-slate-500 mb-4">One prompt per instrument group, each for generating that layer on its own in Suno.</p>
-                  {view.stems.length === 0 && waiting(view.streaming ? 'Waiting for stem prompts...' : 'No stem prompts.')}
+                  {view.stems.length === 0 && waiting(view.streaming ? 'Waiting for stem prompts…' : 'No stem prompts.')}
                   <div className="space-y-3">
                     {view.stems.map((stem, i) => (
-                      <div key={i} className="bg-slate-950 rounded-xl border border-slate-800/70 overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800/70">
-                          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: STEM_COLORS[i % STEM_COLORS.length] }}>
+                      <div key={i} className="bp-stem">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-semibold min-w-0" style={{ color: STEM_COLORS[i % STEM_COLORS.length] }}>
                             {stem.group}
                           </span>
-                          {copyButton(stem.prompt, `stem-${i}`)}
+                          {copyButton(stem.prompt, `stem-${i}`, 'Copy', `Copy ${stem.group} prompt`)}
                         </div>
-                        <p className="px-4 py-3 text-sm text-slate-300 leading-relaxed">{stem.prompt}</p>
+                        <p className="mt-2 text-sm text-slate-300 leading-relaxed">{stem.prompt}</p>
                       </div>
                     ))}
                   </div>
-                </div>
+                </article>
                 )}
 
-                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg">
-                  <div className="flex justify-between items-start mb-4 gap-3">
-                    <h4 className="font-medium text-emerald-400 uppercase tracking-wider text-xs flex items-center gap-2">
-                      <ListMusic className="w-4 h-4" /> Song Structure & Meter
-                    </h4>
-                    {copyButton(formatStructure(view), 'struct')}
+                <article className="bg-slate-900 border border-slate-700 p-6">
+                  <div className="bp-result-actions mb-4">
+                    <h3 className="bp-result-heading flex items-center gap-2">
+                      <ListMusic aria-hidden="true" className="w-4 h-4" /> Song Structure & Meter
+                    </h3>
+                    {copyButton(formatStructure(view), 'struct', 'Copy', 'Copy song structure')}
                   </div>
-                  <div className="flex flex-wrap gap-2 mb-4">
+                  <div className="bp-metrics mb-4">
                     {[
-                      [view.bpm, view.measured?.bpm ? 'BPM · MusicAtlas' : 'BPM · Gemini'],
-                      [view.key, view.measured?.key ? 'Key · MusicAtlas' : 'Key · Gemini'],
-                      [total ? formatDuration(total) : '', 'Length · Gemini'],
+                      [view.bpm, view.example ? 'Tempo (BPM)' : view.measured?.bpm ? 'Tempo (MusicAtlas)' : 'Tempo (Gemini)'],
+                      [view.key, view.example ? 'Key' : view.measured?.key ? 'Key (MusicAtlas)' : 'Key (Gemini)'],
+                      [total ? formatDuration(total) : '', 'Duration'],
                       [view.sections.length ? String(view.sections.length) : '', 'Sections'],
                     ].filter(([v]) => v).map(([v, label]) => (
-                      <div key={label} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 min-w-[92px] flex flex-col">
-                        <span className="font-mono text-base text-slate-100">{v}</span>
-                        <span className={`text-[10px] uppercase tracking-wider ${label.includes('MusicAtlas') ? 'text-emerald-400' : 'text-slate-500'}`}>{label}</span>
+                      <div key={label} className="bp-metric flex flex-col">
+                        <span className="bp-readout text-slate-100">{v}</span>
+                        <span className={`bp-label ${label.includes('MusicAtlas') ? 'text-emerald-400' : 'text-slate-500'}`}>{label}</span>
                       </div>
                     ))}
                   </div>
-                  {(view.bpm || view.key || total > 0) && (
-                    <p className="text-xs text-slate-500 -mt-2 mb-4">{originText(view, total > 0)}</p>
+                  {!view.example && (view.bpm || view.key || total > 0) && (
+                    <p className="text-xs text-slate-500 -mt-2 mb-4">{!view.example && originText(view, total > 0)}</p>
                   )}
                   {total > 0 && (
                     <>
-                      <div className="flex h-7 rounded-md overflow-hidden border border-slate-800" aria-hidden="true">
+                      <div className="bp-timeline flex rounded-sm overflow-hidden" aria-hidden="true">
                         {view.sections.map((sec, i) => (
                           <div
                             key={i}
                             title={`${sec.name} · ${sec.seconds}s`}
                             style={{ flex: `0 0 ${((Number(sec.seconds) || 0) / total) * 100}%`, background: STEM_COLORS[i % STEM_COLORS.length] }}
-                            className="min-w-[2px] flex items-center px-1.5 text-[10px] font-mono text-slate-900 whitespace-nowrap overflow-hidden border-r border-slate-950"
-                          >
-                            {sec.name}
-                          </div>
+                            className="min-w-[2px] border-r border-slate-950"
+                          />
                         ))}
                       </div>
-                      <div className="flex justify-between text-[11px] font-mono text-slate-500 mt-1 mb-4" aria-hidden="true">
+                      <div className="flex justify-between text-xs text-slate-500 mt-1 mb-4" aria-hidden="true">
                         <span>0:00</span><span>{formatDuration(total)}</span>
                       </div>
                     </>
                   )}
-                  {view.sections.length === 0 && waiting(view.streaming ? 'Waiting for the structure...' : 'No structure.')}
+                  {view.sections.length === 0 && waiting(view.streaming ? 'Waiting for the structure…' : 'No structure.')}
                   <div className="space-y-3">
                     {view.sections.map((sec, i) => (
-                      <div key={i} className="bg-slate-950 rounded-xl border border-slate-800/70 px-4 py-3">
+                      <div key={i} className="bp-section-row">
                         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                          <span className="text-sm font-mono text-slate-100 flex items-start gap-2 min-w-0 break-words">
+                          <span className="text-sm text-slate-100 flex items-start gap-2 min-w-0 break-words">
                             <i className="w-2.5 h-2.5 rounded-sm shrink-0 mt-1" style={{ background: STEM_COLORS[i % STEM_COLORS.length] }} />
                             {sectionHeader(sec)}
                           </span>
-                          <span className="text-xs font-mono text-slate-400">
+                          <span className="text-xs text-slate-400">
                             <b className="text-slate-200 font-medium">{sec.bars} bars</b> · {sec.seconds}s · {sec.lines > 0
                               ? (sec.counted
                                 ? <><span className="text-emerald-400" title="Counted by the app from your pasted lyrics">{sec.lines} lines · {sec.meter}</span> · {sec.rhyme}</>
@@ -872,16 +920,16 @@ export default function App() {
                   <p className="text-xs text-slate-500 mt-3">
                     {view.source ? `${view.source} · ` : ''}Rhyme letters mark end-rhyme groups · meter is syllables per line
                   </p>
-                </div>
+                </article>
 
-                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-lg hover:border-slate-700 transition-colors">
-                  <div className="flex justify-between items-start mb-4">
-                    <h4 className="font-medium text-indigo-400 uppercase tracking-wider text-xs flex items-center gap-2">
-                      <FileText className="w-4 h-4" /> Sample Lyrics ({view.target === 'mozart' ? 'Mozart' : 'Suno'} Ready)
-                    </h4>
+                <article className="bg-slate-900 border border-slate-700 p-6">
+                  <div className="bp-result-actions mb-4">
+                    <h3 className="bp-result-heading flex items-center gap-2">
+                      <FileText aria-hidden="true" className="w-4 h-4" /> Sample Lyrics for {view.target === 'mozart' ? 'Mozart' : 'Suno'}
+                    </h3>
                     {copyButton(view.lyrics, 'lyrics', 'Copy Lyrics')}
                   </div>
-                  <div className="bg-slate-950 p-6 rounded-xl border border-slate-800/50">
+                  <div className="bp-lyrics-sheet">
                     {view.lyrics ? (
                       <pre className="text-slate-300 whitespace-pre-wrap font-mono text-sm leading-relaxed">
                         {view.lyrics.split('\n').map((line, i) => (
@@ -890,7 +938,7 @@ export default function App() {
                           </React.Fragment>
                         ))}
                       </pre>
-                    ) : waiting(view.streaming ? 'Waiting for lyrics...' : 'No lyrics.')}
+                    ) : waiting(view.streaming ? 'Waiting for lyrics…' : 'No lyrics.')}
                   </div>
                   <p className="text-xs text-slate-500 mt-3">
                     Original lyrics written to fit the structure above, {view.target === 'mozart'
@@ -898,23 +946,24 @@ export default function App() {
                       : "with Suno section tags. Paste into Suno's lyrics box."}
                     {view.check && <span className="text-slate-400"> · {view.check}</span>}
                   </p>
-                </div>
+                </article>
 
                 {mcpContext && mcpContext.toolsUsed.length > 0 && (
                   <div className="bg-slate-900 rounded-2xl border border-emerald-500/20 p-6 shadow-lg">
+                    <h3 className="bp-result-heading">
                     <button
                       type="button"
-                      onClick={() => setShowRaw(!showRaw)}
+                      onClick={() => setShowRaw(!showRaw)} aria-expanded={showRaw} aria-controls="musicatlas-data"
                       className="w-full flex justify-between items-center text-left"
                     >
-                      <h4 className="font-medium text-emerald-400 uppercase tracking-wider text-xs flex items-center gap-2">
-                        <Users className="w-4 h-4" /> MusicAtlas Data Gemini Used
-                      </h4>
-                      <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showRaw ? 'rotate-180' : ''}`} />
+                      <span className="flex items-center gap-2">
+                        <Users aria-hidden="true" className="w-4 h-4" /> MusicAtlas Data Gemini Used
+                      </span>
+                      <ChevronDown aria-hidden="true" className={`w-4 h-4 text-slate-500 transition-transform ${showRaw ? 'rotate-180' : ''}`} />
                     </button>
+                    </h3>
                     <p className="text-xs text-slate-500 mt-2">Grounded with: {mcpContext.toolsUsed.join(', ')}</p>
-                    {showRaw && (
-                      <div className="mt-4 space-y-4">
+                      <div id="musicatlas-data" hidden={!showRaw} className="mt-4 space-y-4">
                         {[['Track analysis', mcpContext.trackAnalysis], ['Similar tracks', mcpContext.similarTracks], ['Similar artists', mcpContext.similarArtists]]
                           .filter(([, v]) => v)
                           .map(([label, v]) => (
@@ -924,34 +973,32 @@ export default function App() {
                             </div>
                           ))}
                       </div>
-                    )}
                   </div>
                 )}
               </div>
             ) : (
-              <div className="h-full min-h-[500px] flex flex-col items-center justify-center border-2 border-dashed border-slate-800/60 rounded-2xl p-12 text-slate-500 text-center bg-slate-900/20">
+              <div className="min-h-64 flex flex-col items-center justify-center border border-dashed border-slate-700 rounded-xl px-5 py-10 text-slate-500 text-center bg-slate-900/20">
                 {loading ? (
                   <div className="flex flex-col items-center animate-in fade-in duration-300">
-                    <Loader2 className="w-12 h-12 animate-spin text-purple-500 mb-6" />
-                    <p className="text-lg text-slate-300 font-medium">{mcpStage === 'mcp' ? 'Fetching audio analysis over MCP...' : 'Analyzing Musical Style...'}</p>
+                    <Loader2 aria-hidden="true" className="w-12 h-12 animate-spin text-purple-500 mb-6" />
+                    <p className="text-lg text-slate-300 font-medium">{mcpStage === 'mcp' ? 'Fetching audio analysis over MCP…' : 'Analyzing Musical Style…'}</p>
                     <p className="text-sm mt-2 max-w-sm">Generating the style prompt, song structure, and writing original lyrics.</p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
-                    <Sparkles className="w-12 h-12 text-slate-700 mb-6" />
+                    <Sparkles aria-hidden="true" className="w-12 h-12 text-slate-500 mb-6" />
                     <p className="text-lg text-slate-400 font-medium">No results generated yet.</p>
-                    <p className="text-sm mt-2 max-w-sm">Fill out the form on the left to create a highly optimized prompt for Suno or Mozart AI based on any artist or theme.</p>
+                    <p className="text-sm mt-2 max-w-sm">Add a track reference and select Generate Prompt to see your blueprint here.</p>
                   </div>
                 )}
               </div>
             )}
-          </div>
+          </section>
         </div>
       </main>
-      <footer className="max-w-7xl mx-auto px-4 pb-8 text-xs text-slate-500">
-        <a href="changelog.html" className="hover:text-slate-300 underline">Changelog</a>
-        {' · '}
-        <a href="https://gp-songtools.github.io/toolsmenu/privacy.html" className="hover:text-slate-300 underline">Privacy &amp; credits</a>
+      <footer className="bp-footer bp-shell">
+        <a href="changelog.html" className="underline">Changelog</a>
+        <a href="https://gp-songtools.github.io/toolsmenu/privacy.html" className="underline">Privacy &amp; credits</a>
       </footer>
     </div>
   );
