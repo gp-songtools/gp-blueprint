@@ -10,6 +10,10 @@ All notable changes to GP Blueprint (formerly Suno Style Creator), newest first.
 - The example follows the selected Suno or Mozart AI mode. A shortcut opens the example or result from the top of the workspace.
 - Form errors identify the field to correct. Generation status appears next to the Generate Prompt button.
 
+### Fixed
+
+- The browser tab uses the same arrangement mark as the app header.
+
 ## 2026-11-18 — Song spec
 
 ### Added
