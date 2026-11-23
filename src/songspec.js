@@ -1,4 +1,4 @@
-/* songspec v1.1.0 — the GP Song Tools song spec: parse, edit, validate, share.
+/* songspec v1.2.0 — the GP Song Tools song spec: parse, edit, validate, share.
  * Canonical copy: gp-songtools/toolsmenu/songspec/songspec.js. Tools keep a byte-identical
  * copy; never edit a copy, change this file and copy it again. Format: songspec/SPEC.md.
  * No dependencies. Works as a classic <script> (global SongSpec), an ES/CommonJS import, and
@@ -17,7 +17,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const SCHEMA_VERSION = 1;
   const PERSON = 'person';
 
@@ -43,7 +43,8 @@
   const SETTINGS = [
     { key: 'schema_version', owner: '*' },
     { key: 'request', owner: PERSON, values: ['song', 'cover', 'sound'] },
-    { key: 'title', owner: 'lyricpad', max: 256 },
+    { key: 'title', owner: ['lyricpad', PERSON], max: 256 }, // the person may always set it (panel: Save to Drive)
+    { key: 'drive_folder', owner: '*', max: 200, pattern: /^[A-Za-z0-9_-]+$/, fillOnly: true }, // Google Drive id of the song's folder
     { key: 'model', owner: PERSON, values: ['v6-mini', 'v6', 'v6-wild'] },
     { key: 'instrumental', owner: PERSON, bool: true },
     { key: 'voice_id', owner: PERSON },
@@ -319,6 +320,12 @@
   function setSetting(doc, key, value, { by } = {}) {
     const def = SET[key];
     if (!def || !owns(def.owner, by)) throw new Error(`${toolName(by)} can't write the setting "${key}".`);
+    if (def.fillOnly) { // any tool may fill it while empty; only the person may change or clear it
+      const now = setting(doc, key);
+      if (now === String(value ?? '')) return doc;
+      if (now && by !== PERSON) throw new Error(`${toolName(by)} can't change "${key}": it is already set.`);
+    }
+    if (def.pattern && value && !def.pattern.test(String(value))) throw new Error(`"${key}" has characters it can't hold.`);
     writeLine(doc, key, value);
     return doc;
   }
@@ -424,6 +431,7 @@
       const v = setting(doc, def.key);
       if (v === '' || def.key === 'schema_version') continue;
       if (def.max && codepoints(v) > def.max) err(def.key, `${def.key} is ${codepoints(v)} characters; Suno allows ${def.max}.`);
+      if (def.pattern && !def.pattern.test(v)) err(def.key, `${def.key} can only hold letters, digits, - and _ (found '${v}').`);
       if (def.values && !def.values.includes(v)) err(def.key, `${def.key} must be one of ${def.values.join(', ')} (found '${v}').`);
       if (def.bool && !BOOL.includes(v)) err(def.key, `${def.key} must be true or false (found '${v}').`);
       if (def.range) {
@@ -559,6 +567,7 @@
 .ssp button{font:inherit;font-size:.9em;color:inherit;background:transparent;border:1px solid color-mix(in srgb,currentColor 35%,transparent);border-radius:6px;padding:.2rem .6rem;cursor:pointer}
 .ssp button:hover{background:color-mix(in srgb,currentColor 10%,transparent)}.ssp ul{list-style:none;margin:.25rem 0;padding:0}
 .ssp li{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem .6rem;padding:.25rem 0;border-top:1px solid color-mix(in srgb,currentColor 12%,transparent)}
+.ssp .ssp-pick{display:flex;flex-wrap:wrap;gap:.4rem;margin:.25rem 0}.ssp .ssp-pick button{text-align:left;max-width:100%;overflow-wrap:anywhere}
 .ssp .ssp-h{font-weight:600;min-width:9rem}.ssp .ssp-m{opacity:.75;flex:1;min-width:10rem}.ssp .ssp-w{color:#c77700}.ssp .ssp-e{color:#d33}`;
 
   /**
@@ -567,7 +576,8 @@
    * run only on the person's click, after confirming. `onChange(doc)` runs after any change,
    * including ones made in another tab. Returns { refresh, destroy }.
    */
-  function mountPanel(el, { onChange, open = false } = {}) {
+  function mountPanel(el, { onChange, open = false, drive } = {}) {
+    if (drive === undefined) drive = typeof globalThis !== 'undefined' ? globalThis.SongDrive : undefined; // songdrive.js, when loaded
     if (!document.getElementById('ssp-css')) {
       const st = document.createElement('style'); st.id = 'ssp-css'; st.textContent = PANEL_CSS; document.head.append(st);
     }
@@ -580,15 +590,19 @@
     const doc = () => parse(store.load() || create());
     const changed = () => { render(); if (onChange) onChange(doc()); };
 
+    // Replace the browser copy with `text` (from a file or Drive), after confirming. True when it was replaced.
+    const adopt = (text, name) => {
+      if (store.load() && summary(doc()).some((r) => r.present) && !confirm(`Replace the song spec in this browser with ${name}?`)) return false;
+      if (!store.save(text)) { say('This browser blocked saving the song spec (private mode or storage full).', 'ssp-e'); return false; }
+      const errs = validate(parse(text)).filter((i) => i.level === 'error');
+      changed();
+      say(errs.length ? `Opened ${name}. ${errs.length} problem(s): ${errs.map((i) => i.message).join(' ')}` : `Opened ${name}.`, errs.length ? 'ssp-w' : '');
+      return true;
+    };
     file.onchange = async () => {
       const f = file.files[0]; file.value = '';
       if (!f) return;
-      const text = await f.text();
-      if (store.load() && summary(doc()).some((r) => r.present) && !confirm(`Replace the song spec in this browser with ${f.name}?`)) return;
-      if (!store.save(text)) { say('This browser blocked saving the song spec (private mode or storage full).', 'ssp-e'); return; }
-      const errs = validate(parse(text)).filter((i) => i.level === 'error');
-      changed();
-      say(errs.length ? `Opened ${f.name}. ${errs.length} problem(s): ${errs.map((i) => i.message).join(' ')}` : `Opened ${f.name}.`, errs.length ? 'ssp-w' : '');
+      adopt(await f.text(), f.name);
     };
     const actions = mk('div', 'ssp-row');
     actions.append(
@@ -603,11 +617,56 @@
       }),
       file,
     );
-    box.append(sum, mk('p', null, 'One file per song, shared by the GP Song Tools in this browser. Each tool fills in its own part; Download saves it to hand to Claude.'), actions, list, msg);
+    // Google Drive buttons: only when songdrive.js is loaded. Each click calls the drive function straight
+    // away (no await first), because Google's sign-in popup must open from the click.
+    const picks = mk('div', 'ssp-pick'); picks.hidden = true;
+    const outBtn = btn('Sign out of Drive', async () => {
+      try { await drive.signOut(); say('Signed out of Google Drive.'); } catch (e) { say(e.message, 'ssp-e'); }
+      render();
+    });
+    if (drive) {
+      const ref = actions.children[3]; // New song: the Drive buttons go after Copy
+      const driveConfirm = (kind, name) => (kind === 'reuse-folder'
+        ? confirm(`A Drive folder named "${name}" already exists in GP Song Tools. Use it for this song? Cancel makes a new folder instead.`)
+        : confirm('The Drive copy changed since this browser last saved or opened it. Replace it with this browser\'s copy?'));
+      const fail = (e) => say(e && e.code === 'cancelled' ? (e.message || 'Cancelled.') : (e && e.message) || 'Google Drive failed.', e && e.code === 'cancelled' ? 'ssp-w' : 'ssp-e');
+      actions.insertBefore(btn('Save to Drive', () => {
+        picks.hidden = true;
+        let title = setting(doc(), 'title');
+        if (!title) {
+          title = (prompt('Song title for the Drive folder') || '').trim();
+          if (!title) { say('Cancelled: a song needs a title for its Drive folder.', 'ssp-w'); return; }
+          store.update((d) => setSetting(d, 'title', title, { by: PERSON })); changed();
+        }
+        say('Saving to Google Drive…');
+        drive.saveSpec({ confirm: driveConfirm }).then((r) => {
+          changed(); say(`Saved ${r.fileName} to Google Drive (GP Song Tools / ${title}).`);
+        }, (e) => { render(); fail(e); });
+      }), ref);
+      actions.insertBefore(btn('Open from Drive…', () => {
+        say('Looking for songs in Google Drive…');
+        drive.listSongs().then((songs) => {
+          render();
+          const cancel = btn('Cancel', () => { picks.hidden = true; say(''); });
+          if (!songs.length) { picks.replaceChildren(cancel); picks.hidden = false; say('No songs with a song spec in GP Song Tools on your Drive yet.'); return; }
+          picks.replaceChildren(...songs.map((s) => btn(`${s.folderName} · ${String(s.modifiedTime || '').slice(0, 10)}`, () => {
+            picks.hidden = true; say('Opening from Google Drive…');
+            drive.openSpec(s).then((r) => {
+              if (!adopt(r.text, s.fileName)) return;
+              if (setting(doc(), 'drive_folder') !== r.folderId) { store.update((d) => setSetting(d, 'drive_folder', r.folderId, { by: PERSON })); changed(); }
+            }, fail);
+          })), cancel);
+          picks.hidden = false; say(`${songs.length} song${songs.length === 1 ? '' : 's'} on Google Drive. Choose one to open.`);
+        }, (e) => { render(); fail(e); });
+      }), ref);
+      actions.insertBefore(outBtn, ref);
+    }
+    box.append(sum, mk('p', null, 'One file per song, shared by the GP Song Tools in this browser. Each tool fills in its own part; Download saves it to hand to Claude.'), actions, picks, list, msg);
     el.append(box);
 
     function render() {
       const d = doc();
+      outBtn.hidden = !(drive && drive.signedIn && drive.signedIn());
       const rows = summary(d);
       const n = rows.filter((r) => r.present).length;
       const title = setting(d, 'title');
