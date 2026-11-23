@@ -1,4 +1,4 @@
-/* songspec v1.0.1 — the GP Song Tools song spec: parse, edit, validate, share.
+/* songspec v1.1.0 — the GP Song Tools song spec: parse, edit, validate, share.
  * Canonical copy: gp-songtools/toolsmenu/songspec/songspec.js. Tools keep a byte-identical
  * copy; never edit a copy, change this file and copy it again. Format: songspec/SPEC.md.
  * No dependencies. Works as a classic <script> (global SongSpec), an ES/CommonJS import, and
@@ -17,7 +17,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const VERSION = '1.0.1';
+  const VERSION = '1.1.0';
   const SCHEMA_VERSION = 1;
   const PERSON = 'person';
 
@@ -32,6 +32,8 @@
     { id: 'structure', heading: 'Structure', owner: 'gp-blueprint' },
     { id: 'stems', heading: 'Stems', owner: 'gp-blueprint' },
     { id: 'lyrics', heading: 'Lyrics', owner: 'lyricpad', max: 5000 },
+    { id: 'timed-lyrics', heading: 'Timed lyrics', owner: 'framecut' },
+    { id: 'video-sequence', heading: 'Video sequence', owner: 'gp-producer' },
     { id: 'sound', heading: 'Sound', owner: PERSON, max: 500 },
     { id: 'notes', heading: 'Notes', owner: PERSON },
   ];
@@ -63,6 +65,7 @@
   const TOOL_NAMES = {
     'gp-blueprint': 'GP Blueprint', lyricpad: 'Lyricpad', ideawizard: 'Idea Wizard', earprint: 'Earprint',
     'auralyrics-studio': 'AuraLyrics Studio', 'gp-randomash': 'Randomash', 'gp-master': 'GP Mastering',
+    framecut: 'Framecut', 'gp-producer': 'GP Producer',
     person: 'you', claude: 'Claude',
   };
   const toolName = (id) => TOOL_NAMES[id] || id || 'unknown';
@@ -389,6 +392,17 @@
   const BOOL = ['true', 'false'];
   const codepoints = (s) => [...s].length;
 
+  /** Non-blank lines of a body as { n (1-based line in the body), time: { ok, sec } } for the leading [m:ss(.x)] stamp. */
+  function timedLines(body, shape) {
+    const out = [];
+    body.split('\n').forEach((line, i) => {
+      if (!line.trim()) return;
+      const m = /^\s*\[(\d+):(\d{2}(?:\.\d{1,3})?)\]/.exec(line);
+      out.push({ n: i + 1, time: m && (!shape || shape.test(line)) ? { ok: true, sec: Number(m[1]) * 60 + Number(m[2]) } : { ok: false } });
+    });
+    return out;
+  }
+
   /** [{level:'error'|'warning', field, message}] */
   function validate(doc) {
     const out = [];
@@ -444,6 +458,24 @@
     if (lyr) {
       if (S('instrumental') === 'true') err('lyrics', 'instrumental is true but Lyrics has text. Clear one of them.');
       if (!/^\s*\[[^\]]+\]/m.test(lyr.body)) warn('lyrics', 'Lyrics has no [Verse] / [Chorus] section tags.');
+    }
+    const tl = section(doc, 'timed-lyrics');
+    if (tl) {
+      const ts = timedLines(tl.body);
+      const first = ts.find((l) => !l.time.ok);
+      if (first) warn('timed-lyrics', `Timed lyrics line ${first.n} has no [mm:ss.xx] timestamp.`);
+      if (ts.some((l, i) => l.time.ok && ts.slice(0, i).some((p) => p.time.ok && p.time.sec > l.time.sec))) {
+        warn('timed-lyrics', 'Timed lyrics timestamps are not in order.');
+      }
+    }
+    const vs = section(doc, 'video-sequence');
+    if (vs) {
+      const ts = timedLines(vs.body, /^\[\d+:\d{2}(\.\d{1,3})?\]\s+\S/);
+      const first = ts.find((l) => !l.time.ok);
+      if (first) warn('video-sequence', `Video sequence line ${first.n} should be "[mm:ss.xx] clip-name".`);
+      if (ts.some((l, i) => l.time.ok && ts.slice(0, i).some((p) => p.time.ok && p.time.sec > l.time.sec))) {
+        warn('video-sequence', 'Video sequence clips are not in time order.');
+      }
     }
     if (section(doc, 'negative-style') && !section(doc, 'style')) err('negative-style', 'Negative style needs a Style: Suno rejects it otherwise.');
     if (S('request') === 'sound' && !section(doc, 'sound')) err('sound', 'request: sound needs a Sound section (up to 500 characters).');
